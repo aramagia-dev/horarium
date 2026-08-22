@@ -3,7 +3,8 @@
 /* Signed Supabase URLs and local data URLs are intentionally rendered without Next image optimization. */
 /* eslint-disable @next/next/no-img-element */
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { AlignLeft, CalendarDays, ChevronDown, Heading2, List, ListChecks, UserRound } from "lucide-react";
 import {
   addLocalDays,
   formatClassDate,
@@ -57,6 +58,7 @@ export function SubjectModal({
     noteDate: "",
     tags: "",
     status: "active" as NoteStatus,
+    sessionId: sessions.length === 1 ? sessions[0].id : "",
   });
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [attachments, setAttachments] = useState<Record<string, NoteAttachment[]>>({});
@@ -67,16 +69,41 @@ export function SubjectModal({
       ? ""
       : "Las notas se guardan en este navegador. Configurá Supabase para compartirlas.",
   );
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [openBlockMenuId, setOpenBlockMenuId] = useState<string | null>(null);
+  const blockMenuRef = useRef<HTMLDivElement>(null);
+
+  const selectedSessionId = sessions.length === 1 ? sessions[0].id : draft.sessionId;
+  const selectedSession = sessions.find((session) => session.id === selectedSessionId);
+  const contextSession = selectedSession ?? subject;
   const classDate =
     date ??
     addLocalDays(
       getWeekStart(new Date()),
       ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].indexOf(
-        subject.day,
+        contextSession.day,
       ),
     );
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!openBlockMenuId) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!blockMenuRef.current?.contains(event.target as Node)) setOpenBlockMenuId(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenBlockMenuId(null);
+        window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-block-trigger="${openBlockMenuId}"]`)?.focus());
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openBlockMenuId]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -130,7 +157,7 @@ export function SubjectModal({
     const { data, error: initialError } = await supabase!
       .from("notes")
       .select(
-        "id, author_id, title, content, blocks, note_date, tags, status, created_at, updated_at",
+        "id, author_id, title, content, blocks, note_date, tags, status, created_at, updated_at, session_id",
       )
       .eq("subject_id", subject.subjectId)
       .order("created_at", { ascending: false });
@@ -144,7 +171,7 @@ export function SubjectModal({
     }
     if (error) setMessage("No se pudieron cargar las notas compartidas. Revisá la migración de Stage 2.");
     else {
-      setNotes(noteRows.map((note) => ({ id: String(note.id), author_id: typeof note.author_id === "string" ? note.author_id : null, title: typeof note.title === "string" ? note.title : "Sin título", content: typeof note.content === "string" ? note.content : "", blocks: normalizeBlocks(note.blocks, typeof note.content === "string" ? note.content : ""), attachments: [], note_date: typeof note.note_date === "string" ? note.note_date : null, tags: Array.isArray(note.tags) ? note.tags.map(String) : [], status: note.status === "archived" ? "archived" : "active", created_at: String(note.created_at), updated_at: String(note.updated_at) })));
+      setNotes(noteRows.map((note) => ({ id: String(note.id), author_id: typeof note.author_id === "string" ? note.author_id : null, title: typeof note.title === "string" ? note.title : "Sin título", content: typeof note.content === "string" ? note.content : "", blocks: normalizeBlocks(note.blocks, typeof note.content === "string" ? note.content : ""), attachments: [], note_date: typeof note.note_date === "string" ? note.note_date : null, tags: Array.isArray(note.tags) ? note.tags.map(String) : [], status: note.status === "archived" ? "archived" : "active", created_at: String(note.created_at), updated_at: String(note.updated_at), session_id: typeof note.session_id === "string" ? note.session_id : null })));
       const noteIds = noteRows.map((note) => String(note.id));
       if (noteIds.length > 0) {
         const attachmentResult = await supabase!.from("note_attachments").select("id, note_id, name, mime_type, size, storage_path, created_at").in("note_id", noteIds);
@@ -192,6 +219,7 @@ export function SubjectModal({
                   note_date: workspace ? draft.noteDate || null : note.note_date,
                   tags: workspace ? tags : note.tags,
                   status: workspace ? draft.status : note.status,
+                  session_id: workspace ? selectedSessionId || null : note.session_id,
                   updated_at: now,
                 }
               : note,
@@ -204,6 +232,7 @@ export function SubjectModal({
               note_date: draft.noteDate || null,
               tags,
               status: draft.status,
+              session_id: selectedSessionId || null,
               created_at: now,
               updated_at: now,
             },
@@ -220,6 +249,7 @@ export function SubjectModal({
         noteDate: "",
         tags: "",
         status: "active",
+        sessionId: sessions.length === 1 ? sessions[0].id : "",
       });
       setEditingId(null);
       setPendingFiles([]);
@@ -233,6 +263,7 @@ export function SubjectModal({
       note_date: draft.noteDate || null,
       tags,
       status: draft.status,
+      session_id: selectedSessionId || null,
       updated_at: now,
     };
     const query = editingId
@@ -257,6 +288,7 @@ export function SubjectModal({
         noteDate: "",
         tags: "",
         status: "active",
+        sessionId: sessions.length === 1 ? sessions[0].id : "",
       });
       setEditingId(null);
       window.dispatchEvent(new CustomEvent(notesChangedEvent));
@@ -321,10 +353,17 @@ export function SubjectModal({
       noteDate: note.note_date ?? "",
       tags: note.tags.join(", "),
       status: note.status,
+      sessionId: note.session_id ?? "",
     });
     setPendingFiles([]);
     setEditingId(note.id);
   };
+
+  useEffect(() => {
+    if (!openBlockMenuId) return;
+    window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-block-option^="${openBlockMenuId}-"]`)?.focus());
+  }, [openBlockMenuId]);
+
   return (
     <div className={workspace ? "min-h-full" : "fixed inset-0 z-50 flex justify-end"}>
       {!workspace ? <button
@@ -369,18 +408,30 @@ export function SubjectModal({
               {subject.subject}
             </h2>
             <p className="text-xs text-[var(--muted)]">
-              {formatClassDate(classDate)} · {subject.start} – {subject.end}
+              {selectedSession ? `${formatDay(selectedSession.day)} · ${selectedSession.start} – ${selectedSession.end}` : "Contexto por materia"}
             </p>
+            <label className="block rounded-xl border border-[var(--line)] bg-[var(--background)] p-3 text-xs font-semibold text-[var(--muted)]">
+              <span className="flex items-center gap-2"><CalendarDays size={15} aria-hidden="true" /> Horario usado como contexto</span>
+              <select
+                value={selectedSessionId}
+                onChange={(event) => setDraft({ ...draft, sessionId: event.target.value })}
+                aria-label="Horario usado como contexto"
+                className="schedule-context-select mt-2 w-full bg-transparent text-sm font-normal text-[var(--ink)] outline-none"
+              >
+                <option value="">Toda la materia (sin horario específico)</option>
+                {sessions.map((session) => <option key={session.id} value={session.id}>{formatDay(session.day)} · {session.start} – {session.end} · {session.section} · {session.professor}</option>)}
+              </select>
+            </label>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-y border-[var(--line)] py-4 sm:grid-cols-4">
               {[
-                ["Profesor", subject.professor],
-                ["Sección", subject.section],
-                ["Aula", subject.room],
-                ["Duración", `${minutes(subject.start, subject.end)} min`],
+                ["Profesor", contextSession.professor],
+                ["Sección", contextSession.section],
+                ["Aula", contextSession.room],
+                ["Duración", `${minutes(contextSession.start, contextSession.end)} min`],
               ].map(([label, value]) => (
                 <div key={label} className="min-w-0">
-                  <p className="text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">
-                    {label}
+                  <p className="flex items-center gap-1 text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">
+                    {label === "Profesor" ? <UserRound size={12} aria-hidden="true" /> : null}{label}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-[var(--ink)]">
                     {value}
@@ -390,10 +441,21 @@ export function SubjectModal({
             </div>
           </> : null}
           {workspace ? <div className="space-y-1 border-t border-[var(--line)] pt-6" aria-label="Editor de bloques">
-            {draft.blocks.map((block, index) => <div key={block.id} className="flex gap-2">
-              <select value={block.type} onChange={(event) => setDraft({ ...draft, blocks: draft.blocks.map((item) => item.id === block.id ? { ...item, type: event.target.value as NoteBlockType, checked: event.target.value === "checklist" ? Boolean(item.checked) : undefined } : item) })} aria-label={`Tipo del bloque ${index + 1}`} className="w-7 shrink-0 appearance-none border-0 bg-transparent p-0 text-[10px] text-[var(--muted)] outline-none focus:ring-2 focus:ring-[var(--accent)] sm:w-8">
-                <option value="paragraph">Párrafo</option><option value="heading">Título</option><option value="bullet">Viñeta</option><option value="checklist">Checklist</option>
-              </select>
+             {draft.blocks.map((block, index) => <div key={block.id} className="flex gap-2">
+               <div ref={openBlockMenuId === block.id ? blockMenuRef : undefined} className="relative shrink-0 pt-2">
+                 <button type="button" data-block-trigger={block.id} aria-label={`Cambiar tipo del bloque ${index + 1}`} aria-haspopup="menu" aria-expanded={openBlockMenuId === block.id} onClick={() => setOpenBlockMenuId(openBlockMenuId === block.id ? null : block.id)} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+                   <BlockIcon type={block.type} />
+                   <ChevronDown size={11} aria-hidden="true" />
+                 </button>
+                 {openBlockMenuId === block.id ? <div role="menu" aria-label={`Tipos para el bloque ${index + 1}`} className="absolute left-0 top-11 z-20 w-44 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-1 shadow-xl">
+                   {blockTypeOptions.map((option, optionIndex) => <button key={option.value} type="button" role="menuitem" data-block-option={`${block.id}-${option.value}`} onKeyDown={(event) => {
+                     const nextIndex = event.key === "ArrowDown" ? (optionIndex + 1) % blockTypeOptions.length : event.key === "ArrowUp" ? (optionIndex - 1 + blockTypeOptions.length) % blockTypeOptions.length : event.key === "Home" ? 0 : event.key === "End" ? blockTypeOptions.length - 1 : -1;
+                     if (nextIndex >= 0) { event.preventDefault(); document.querySelector<HTMLButtonElement>(`[data-block-option="${block.id}-${blockTypeOptions[nextIndex].value}"]`)?.focus(); }
+                   }} onClick={() => { setDraft({ ...draft, blocks: draft.blocks.map((item) => item.id === block.id ? { ...item, type: option.value, checked: option.value === "checklist" ? Boolean(item.checked) : undefined } : item) }); setOpenBlockMenuId(null); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-block-trigger="${block.id}"]`)?.focus()); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--ink)] hover:bg-[var(--soft)] focus-visible:bg-[var(--soft)] focus-visible:outline-none">
+                     <BlockIcon type={option.value} /><span>{option.label}</span>
+                   </button>)}
+                 </div> : null}
+               </div>
               {block.type === "checklist" ? <input type="checkbox" checked={Boolean(block.checked)} onChange={(event) => setDraft({ ...draft, blocks: draft.blocks.map((item) => item.id === block.id ? { ...item, checked: event.target.checked } : item) })} aria-label="Marcar checklist" className="mt-3 accent-[var(--accent)]" /> : null}
               <textarea value={block.text} onChange={(event) => setDraft({ ...draft, blocks: draft.blocks.map((item) => item.id === block.id ? { ...item, text: event.target.value } : item) })} rows={block.type === "heading" ? 1 : 2} placeholder={block.type === "heading" ? "Título del bloque" : "Escribí aquí... Usá / para ver comandos"} aria-label={`Texto del bloque ${index + 1}`} className={block.type === "heading" ? "min-w-0 flex-1 resize-y border-0 bg-transparent p-2 text-lg font-semibold leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0" : "min-w-0 flex-1 resize-y border-0 bg-transparent p-2 text-sm leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0"} />
               <button type="button" onClick={() => setDraft({ ...draft, blocks: draft.blocks.filter((item) => item.id !== block.id) })} disabled={draft.blocks.length === 1} className="self-start px-1 py-2 text-xs text-[var(--muted)] opacity-0 transition hover:text-rose-500 focus-visible:opacity-100 disabled:opacity-0" aria-label="Eliminar bloque">×</button>
@@ -458,6 +520,7 @@ export function SubjectModal({
                     noteDate: "",
                     tags: "",
                     status: "active",
+                    sessionId: sessions.length === 1 ? sessions[0].id : "",
                   });
                 }}
                 className="rounded-lg px-3 py-2 text-xs font-semibold text-[var(--muted)]"
@@ -546,6 +609,7 @@ export function SubjectModal({
                     {note.status === "archived" ? "Archivada" : "Activa"}
                   </span>
                 </div>
+                {note.session_id ? <p className="mt-2 flex items-center gap-1 text-xs text-[var(--muted)]"><CalendarDays size={13} aria-hidden="true" /> Contexto: {(() => { const noteSession = sessions.find((session) => session.id === note.session_id); return noteSession ? `${formatDay(noteSession.day)} · ${noteSession.start} – ${noteSession.end} · ${noteSession.section}` : "horario guardado"; })()}</p> : null}
                 <div className="mt-2 space-y-1 text-sm leading-6 text-[var(--ink)]">
                   {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={block.type === "heading" ? "font-semibold" : ""}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
                 </div>
@@ -626,4 +690,16 @@ function fileAsDataUrl(file: File) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+const blockTypeOptions: Array<{ value: NoteBlockType; label: string }> = [
+  { value: "paragraph", label: "Párrafo" },
+  { value: "heading", label: "Título" },
+  { value: "bullet", label: "Viñeta" },
+  { value: "checklist", label: "Checklist" },
+];
+
+function BlockIcon({ type }: { type: NoteBlockType }) {
+  const Icon = type === "heading" ? Heading2 : type === "bullet" ? List : type === "checklist" ? ListChecks : AlignLeft;
+  return <Icon size={15} aria-hidden="true" />;
 }

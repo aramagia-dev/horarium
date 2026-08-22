@@ -179,6 +179,30 @@ test.describe("Horarium schedule", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 
+  test("selects a Redes session and uses the accessible block menu", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    if ((await page.getByTestId("auth-local-status").count()) === 0) test.skip(true, "La prueba usa el fallback local");
+    await page.evaluate(() => localStorage.removeItem("horarium:notes:subject:RED"));
+    await page.getByRole("button", { name: "Notas", exact: true }).click();
+    await page.getByRole("button", { name: /Redes de Datos/ }).click();
+
+    const dialog = page.getByRole("dialog");
+    const sessionSelect = dialog.getByRole("combobox", { name: "Horario usado como contexto" });
+    await expect(sessionSelect).toHaveValue("");
+    await sessionSelect.selectOption("redes-thursday-practice");
+    await expect(dialog).toContainText("Jue · 19:00 – 21:15");
+
+    await dialog.getByRole("button", { name: "Cambiar tipo del bloque 1" }).click();
+    await expect(dialog.getByRole("menu")).toBeVisible();
+    await dialog.getByRole("menuitem", { name: "Checklist" }).click();
+    await expect(dialog.getByRole("menu")).toBeHidden();
+    await dialog.getByRole("textbox", { name: "Texto del bloque 1" }).fill("Apuntes de práctica");
+    await dialog.getByRole("button", { name: "Agregar nota", exact: true }).click();
+    await expect(dialog).toContainText("Contexto: Jue · 19:00 – 21:15 · Práctica");
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("horarium:notes:subject:RED"))).toContain("redes-thursday-practice");
+  });
+
   test("opens and closes Monday subject details", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");

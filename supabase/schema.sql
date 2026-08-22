@@ -81,7 +81,8 @@ create table if not exists public.notes (
   tags text[] not null default '{}',
   status text not null default 'active' check (status in ('active', 'archived')),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  session_id uuid references public.schedules(id) on delete set null
 );
 
 create or replace function public.set_updated_at()

@@ -27,6 +27,7 @@ export type LocalNote = {
   status: NoteStatus;
   created_at: string;
   updated_at: string;
+  session_id?: string | null;
 };
 
 export const notesChangedEvent = "horarium:notes-changed";

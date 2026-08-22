@@ -7,6 +7,7 @@ alter table public.notes add column if not exists note_date date;
 alter table public.notes add column if not exists tags text[];
 alter table public.notes add column if not exists status text;
 alter table public.notes add column if not exists updated_at timestamptz;
+alter table public.notes add column if not exists session_id uuid references public.schedules(id) on delete set null;
 
 update public.notes
 set title = coalesce(nullif(trim(title), ''), 'Sin título'),

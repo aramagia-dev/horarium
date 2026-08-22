@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { days, scheduleSessions as localScheduleSessions, subjects as localSubjects, type Accent, type Day } from "@/lib/schedule-data";
 
@@ -210,5 +211,5 @@ function AccessState({ title, text }: { title: string; text: string }) { return 
 function Metric({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) { return <div className={`rounded-xl border p-4 ${accent ? "border-[var(--accent)]/40 bg-[var(--accent)]/10" : "border-[var(--line)] bg-[var(--surface)]"}`}><p className="text-xs font-semibold text-[var(--muted)]">{label}</p><p className="mt-1 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">{value}</p></div>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-xs font-semibold text-[var(--muted)]">{label}<span className="mt-1 block">{children}</span></label>; }
 function List({ children }: { children: React.ReactNode }) { return <div className="mt-5 space-y-2 border-t border-[var(--line)] pt-4">{children}</div>; }
-function ListItem({ text, onEdit, onDelete }: { text: string; onEdit: () => void; onDelete: () => void }) { return <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--background)] px-3 py-2"><span className="min-w-0 truncate text-xs text-[var(--ink)]">{text}</span><span className="flex shrink-0 gap-2"><button type="button" onClick={onEdit} className="text-xs font-semibold text-[var(--accent)]">Editar</button><button type="button" onClick={onDelete} className="text-xs font-semibold text-rose-500">Eliminar</button></span></div>; }
+function ListItem({ text, onEdit, onDelete }: { text: string; onEdit: () => void; onDelete: () => void }) { return <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--background)] px-3 py-2"><span className="min-w-0 truncate text-xs text-[var(--ink)]">{text}</span><span className="flex shrink-0 gap-2"><button type="button" onClick={onEdit} className="flex items-center gap-1 text-xs font-semibold text-[var(--accent)]"><Pencil size={13} aria-hidden="true" />Editar</button><button type="button" onClick={onDelete} className="flex items-center gap-1 text-xs font-semibold text-rose-500"><Trash2 size={13} aria-hidden="true" />Eliminar</button></span></div>; }
 function CancelButton({ onClick }: { onClick: () => void }) { return <button type="button" onClick={onClick} className="mt-3 text-xs font-semibold text-[var(--muted)]">Cancelar edición</button>; }

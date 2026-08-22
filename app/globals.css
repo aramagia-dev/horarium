@@ -66,6 +66,9 @@ body { background: var(--background); color: var(--foreground); font-family: var
 .admin-control::placeholder { color: var(--muted); }
 .admin-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .admin-control:disabled { cursor: not-allowed; opacity: 0.6; }
+.schedule-context-select { color-scheme: light; }
+.schedule-context-select option { background: var(--surface); color: var(--ink); }
+.dark .schedule-context-select { color-scheme: dark; }
 .admin-primary {
   border-radius: 0.5rem;
   background: var(--accent);

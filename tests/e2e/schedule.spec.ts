@@ -15,6 +15,21 @@ test.describe("Horarium schedule", () => {
     }
   });
 
+  test("allows toggling password visibility in the auth form", async ({ page }) => {
+    await page.goto("/");
+    const localBadge = page.getByTestId("auth-local-status");
+    if ((await localBadge.count()) > 0) test.skip(true, "La prueba requiere autenticación remota");
+
+    await page.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
+    const password = page.locator('input[autocomplete="current-password"]');
+    const toggle = page.getByRole("button", { name: "Mostrar contraseña" });
+    await expect(toggle).toBeVisible();
+    await expect(password).toHaveAttribute("type", "password");
+    await toggle.click();
+    await expect(password).toHaveAttribute("type", "text");
+    await expect(page.getByRole("button", { name: "Ocultar contraseña" })).toBeVisible();
+  });
+
   test("keeps administration hidden while signed out (both modes)", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");

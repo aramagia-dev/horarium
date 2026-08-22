@@ -1,5 +1,19 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Supabase setup
+
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the Supabase SQL editor.
+3. Copy `.env.example` to `.env.local` and set the public project URL and anon key.
+4. Create the first user in Supabase Authentication > Users.
+5. Promote that user with `update public.profiles set role = 'admin' where id = 'USER-UUID';`. After promotion, sign in again: the `Administración` navigation item appears and opens the authenticated CRUD panel.
+
+The app remains in local-first mode when the public variables are absent. Never put a Supabase service-role key in browser code or `NEXT_PUBLIC_*` variables.
+
+## Admin schedule workflow
+
+Subjects are unique catalog entities. Professors and rooms belong to each schedule session, so one subject can have several sessions with different assignments. After connecting Supabase and opening the administrator panel, use `Importar horario local (11 sesiones)` while the shared schedule is empty. The import resolves the existing subject, professor, and room catalogs before issuing one insert request; if any exact mapping is missing, it inserts nothing. Later, use `Asignaciones por materia` and `Editar asignación` to change the professor or room for one session without recreating its subject.
+
 ## Getting Started
 
 First, run the development server:

@@ -4,7 +4,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AlignLeft, CalendarDays, ChevronDown, Heading2, List, ListChecks, UserRound } from "lucide-react";
+import { AlignLeft, CalendarDays, ChevronDown, Heading2, List, ListChecks, UserRound, Users } from "lucide-react";
 import {
   addLocalDays,
   formatClassDate,
@@ -73,6 +73,9 @@ export function SubjectModal({
   const [isAdmin, setIsAdmin] = useState(false);
   const [openBlockMenuId, setOpenBlockMenuId] = useState<string | null>(null);
   const blockMenuRef = useRef<HTMLDivElement>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<"todas" | "mias" | "companeros" | "archivadas">("todas");
+  const [authorMap, setAuthorMap] = useState<Record<string, { display_name?: string | null; email?: string | null }>>({});
 
   const selectedSessionId = sessions.length === 1 ? sessions[0].id : draft.sessionId;
   const selectedSession = sessions.find((session) => session.id === selectedSessionId);
@@ -342,6 +345,108 @@ export function SubjectModal({
     if (error) setMessage("No se pudo eliminar el adjunto."); else await loadNotes();
   }
 
+  const NOTE_PREVIEW_LIMIT = 280;
+
+  function plainFromNote(note: LocalNote): string {
+    const blocks = normalizeBlocks(note.blocks, note.content);
+    const joined = blocks.map((b) => b.text.trim()).filter(Boolean).join(" ");
+    return joined || note.content || "";
+  }
+
+  function truncateAtWordBoundary(text: string, limit: number): string {
+    if (text.length <= limit) return text;
+    const slice = text.slice(0, limit);
+    const lastSpace = slice.lastIndexOf(" ");
+    const cut = lastSpace > limit * 0.6 ? slice.slice(0, lastSpace) : slice;
+    return `${cut.trimEnd()}…`;
+  }
+
+  function initialsFromName(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+
+  function authorBadgeInfo(note: LocalNote): { label: string; initials: string; isMine: boolean } {
+    const isMine = Boolean(userId && note.author_id === userId);
+    if (isMine) return { label: "Vos", initials: "V", isMine: true };
+    if (note.author_id && authorMap[note.author_id]?.display_name) {
+      const name = authorMap[note.author_id].display_name!.trim();
+      return { label: name, initials: initialsFromName(name), isMine: false };
+    }
+    if (note.author_id && authorMap[note.author_id]?.email) {
+      const email = authorMap[note.author_id].email!.trim();
+      return { label: email, initials: email.slice(0, 2).toUpperCase(), isMine: false };
+    }
+    if (note.author_id) return { label: "Compartida", initials: "C", isMine: false };
+    return { label: "Compartida", initials: "C", isMine: false };
+  }
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredNotes = (() => {
+    if (!workspace) return notes;
+    if (filter === "todas") return notes;
+    if (filter === "mias") return notes.filter((n) => n.author_id === userId);
+    if (filter === "companeros") return notes.filter((n) => n.author_id !== userId && n.author_id != null);
+    if (filter === "archivadas") return notes.filter((n) => n.status === "archived");
+    return notes;
+  })();
+
+  const filterCounts = {
+    todas: notes.length,
+    mias: notes.filter((n) => n.author_id === userId).length,
+    companeros: notes.filter((n) => n.author_id !== userId && n.author_id != null).length,
+    archivadas: notes.filter((n) => n.status === "archived").length,
+  };
+
+  useEffect(() => {
+    if (!supabase || !notes.length) return;
+    const authorIds = Array.from(new Set(notes.map((n) => n.author_id).filter((id): id is string => Boolean(id))));
+    if (authorIds.length === 0) return;
+    const missing = authorIds.filter((id) => !(id in authorMap));
+    if (missing.length === 0) return;
+    let active = true;
+    void (async () => {
+      try {
+        const result = await supabase.from("profiles").select("id, display_name").in("id", missing);
+        if (!active) return;
+        if (result.error || !result.data) return;
+        const next: Record<string, { display_name?: string | null; email?: string | null }> = {};
+        for (const row of result.data as Array<{ id: string; display_name?: string | null }>) {
+          next[row.id] = { display_name: row.display_name ?? null };
+        }
+        // Try email fallback if column exists: second attempt with email
+        // If profiles has email column, try to enrich (gracefully handle missing column)
+        try {
+          const withEmail = await supabase.from("profiles").select("id, email").in("id", missing);
+          if (!withEmail.error && withEmail.data) {
+            for (const row of withEmail.data as Array<{ id: string; email?: string | null }>) {
+              if (next[row.id]) next[row.id].email = row.email ?? null;
+              else next[row.id] = { display_name: null, email: row.email ?? null };
+            }
+          }
+        } catch {
+          // ignore missing column
+        }
+        if (Object.keys(next).length) setAuthorMap((prev) => ({ ...prev, ...next }));
+      } catch {
+        // silent fallback to Vos/Compartida
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [notes, authorMap]);
+
   const isRemote = Boolean(supabase && userId);
   const canMutateNote = (note: LocalNote) => !isRemote || isAdmin || note.author_id === userId;
 
@@ -587,19 +692,44 @@ export function SubjectModal({
             <span className="text-xs text-[var(--muted)]">{notes.length} {notes.length === 1 ? "nota" : "notas"}</span>
           </div>
           {message ? <p className="mt-4 rounded-lg bg-[var(--soft)] px-3 py-2 text-xs leading-5 text-[var(--muted)]">{message}</p> : null}
+          {workspace ? <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filtros de notas">
+            {([
+              ["todas", `Todas (${filterCounts.todas})`],
+              ["mias", `Mías (${filterCounts.mias})`],
+              ["companeros", `De compañeros (${filterCounts.companeros})`],
+              ["archivadas", `Archivadas (${filterCounts.archivadas})`],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilter(value)}
+                aria-pressed={filter === value}
+                className={filter === value ? "rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white" : "rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"}
+              >
+                {label}
+              </button>
+            ))}
+          </div> : null}
         </div>
         <div className={workspace ? "order-3 mt-12 space-y-5 pb-10" : "order-4 mt-6 space-y-3"}>
           {loading ? (
             <p className="text-sm text-[var(--muted)]">Cargando notas...</p>
-          ) : notes.length === 0 ? (
+          ) : filteredNotes.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--line)] px-4 py-6 text-center text-sm text-[var(--muted)]">
-              Todavía no hay notas. Agregá la primera arriba.
+              {notes.length === 0 ? "Todavía no hay notas. Agregá la primera arriba." : "No hay notas para este filtro."}
             </div>
           ) : (
-            notes.map((note) => (
+            filteredNotes.map((note) => {
+              const plain = plainFromNote(note);
+              const isLong = workspace && plain.length > NOTE_PREVIEW_LIMIT;
+              const isExpanded = expandedIds.has(note.id);
+              const preview = isLong && !isExpanded ? truncateAtWordBoundary(plain, NOTE_PREVIEW_LIMIT) : plain;
+              const badge = authorBadgeInfo(note);
+              const isMine = badge.isMine;
+              return (
               <article
                 key={note.id}
-                className={`${workspace ? "border-t border-[var(--line)] py-5" : "rounded-xl border border-[var(--line)] bg-[var(--background)] p-4"} ${note.status === "archived" ? "opacity-70" : ""}`}
+                className={`${workspace ? `border-t py-5 ${isMine ? "border-l-2 border-[var(--accent)] bg-[var(--soft)]/35 pl-4" : "border-[var(--line)] pl-1"}` : "rounded-xl border border-[var(--line)] bg-[var(--background)] p-4"} ${note.status === "archived" ? "opacity-70" : ""} ${workspace && isMine ? "rounded-r-xl" : ""}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <h4 className="font-semibold text-[var(--ink)]">
@@ -609,10 +739,37 @@ export function SubjectModal({
                     {note.status === "archived" ? "Archivada" : "Activa"}
                   </span>
                 </div>
-                {note.session_id ? <p className="mt-2 flex items-center gap-1 text-xs text-[var(--muted)]"><CalendarDays size={13} aria-hidden="true" /> Contexto: {(() => { const noteSession = sessions.find((session) => session.id === note.session_id); return noteSession ? `${formatDay(noteSession.day)} · ${noteSession.start} – ${noteSession.end} · ${noteSession.section}` : "horario guardado"; })()}</p> : null}
-                <div className="mt-2 space-y-1 text-sm leading-6 text-[var(--ink)]">
-                  {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={block.type === "heading" ? "font-semibold" : ""}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className={isMine ? "inline-flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold text-white" : "inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold text-[var(--muted)]"}>
+                    {isMine ? <UserRound size={12} aria-hidden="true" /> : badge.initials ? <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--soft)] text-[8px] font-bold text-[var(--accent)]">{badge.initials.slice(0,2)}</span> : <Users size={12} aria-hidden="true" />}
+                    <span className="max-w-[14ch] truncate">{badge.label}</span>
+                  </span>
                 </div>
+                {note.session_id ? <p className="mt-2 flex items-center gap-1 text-xs text-[var(--muted)]"><CalendarDays size={13} aria-hidden="true" /> Contexto: {(() => { const noteSession = sessions.find((session) => session.id === note.session_id); return noteSession ? `${formatDay(noteSession.day)} · ${noteSession.start} – ${noteSession.end} · ${noteSession.section}` : "horario guardado"; })()}</p> : null}
+                {workspace ? (
+                  <>
+                    {isLong && !isExpanded ? (
+                      <p className="mt-2 line-clamp-4 text-sm leading-6 text-[var(--ink)]">{preview}</p>
+                    ) : isLong && isExpanded ? (
+                      <div className="mt-2 space-y-1 text-sm leading-6 text-[var(--ink)]">
+                        {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={block.type === "heading" ? "font-semibold" : ""}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
+                      </div>
+                    ) : (
+                      <div className="mt-2 space-y-1 text-sm leading-6 text-[var(--ink)]">
+                        {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={block.type === "heading" ? "font-semibold" : ""}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
+                      </div>
+                    )}
+                    {isLong ? (
+                      <button type="button" aria-expanded={isExpanded} onClick={() => toggleExpanded(note.id)} className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2">
+                        {isExpanded ? "Ver menos" : "Ver más"}
+                      </button>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="mt-2 space-y-1 text-sm leading-6 text-[var(--ink)]">
+                    {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={block.type === "heading" ? "font-semibold" : ""}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
+                  </div>
+                )}
                 {note.note_date ? (
                   <time className="mt-3 block text-xs text-[var(--muted)]">
                     Fecha:{" "}
@@ -667,7 +824,8 @@ export function SubjectModal({
                    </div> : <span className="text-xs text-[var(--muted)]">Solo lectura</span>}
                 </div>
               </article>
-            ))
+              );
+            })
           )}
         </div>
       </aside>

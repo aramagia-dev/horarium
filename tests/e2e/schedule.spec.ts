@@ -61,6 +61,41 @@ test.describe("Horarium schedule", () => {
     }
   });
 
+  test("attaches a dated timed event to the matching subject session", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/");
+    if ((await page.getByTestId("auth-local-status").count()) === 0) test.skip(true, "La prueba usa el fallback local");
+
+    await page.evaluate(() => {
+      const today = new Date();
+      const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
+      const date = `${monday.getFullYear()}-${`${monday.getMonth() + 1}`.padStart(2, "0")}-${`${monday.getDate()}`.padStart(2, "0")}`;
+      localStorage.setItem("horarium:academic-events", JSON.stringify([{
+        id: "e2e-schedule-event",
+        title: "Evento de sesión E2E",
+        type: "parcial",
+        date,
+        time: "19:30",
+        subject_id: "subject-red",
+        subject_code: "RED",
+        description: null,
+        status: "pending",
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }]));
+    });
+    await page.reload();
+    await page.getByRole("button", { name: "Horario", exact: true }).click();
+
+    await expect(page.getByRole("button", { name: /Redes de Datos, evento académico: Evento de sesión E2E/ })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /Administración de Sistemas de Información, evento académico: Evento de sesión E2E/ })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Evento académico: Parcial: Evento de sesión E2E, 19:30" }).click();
+    await expect(page.getByRole("heading", { name: "Eventos" })).toBeVisible();
+    await expect(page.locator("article[data-selected='true']")).toContainText("Evento de sesión E2E");
+  });
+
   test("navigates weeks and returns to today", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");

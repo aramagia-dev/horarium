@@ -13,6 +13,7 @@ import { EventsBoard } from "@/components/events-board";
 import { SettingsBoard } from "@/components/settings-board";
 import { SubjectModal } from "@/components/subject-modal";
 import { scheduleSessions, type ScheduleEntry } from "@/lib/schedule-data";
+import type { AcademicEvent } from "@/lib/academic-events";
 import { loadPublicSchedule, type PublicScheduleState } from "@/lib/public-schedule";
 
 type View = "home" | "schedule" | "events" | "notes" | "subjects" | "professors" | "rooms" | "settings" | "admin";
@@ -31,6 +32,7 @@ export default function Home() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<ScheduleEntry | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [dark, setDark] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export default function Home() {
   }
 
   function navigate(nextView: View) { setView(nextView); setDrawerOpen(false); }
+  function selectEvent(event: AcademicEvent) { setSelectedEventId(event.id); navigate("events"); }
   const handleAuthChange = useCallback(({ userId: nextUserId, isAdmin: nextIsAdmin }: AuthState) => {
     setUserId(nextUserId);
     setIsAdmin(nextIsAdmin);
@@ -83,7 +86,7 @@ export default function Home() {
         <div className="flex items-center gap-3"><ThemeToggle dark={dark} onToggle={toggleTheme} /><AuthPanel onAuthChange={handleAuthChange} /></div>
     </header>
     <div className="flex min-h-[calc(100vh-72px)]">{!sidebarCollapsed ? <Sidebar items={navItems} view={view} onNavigate={navigate} /> : null}<MobileDrawer items={navItems} open={drawerOpen} view={view} onNavigate={navigate} onClose={() => setDrawerOpen(false)} /><div className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
-        {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={publicData.events} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex max-w-5xl items-center gap-2 overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{publicData.events.filter((event) => event.status !== "cancelled").slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => navigate("events")} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{publicData.events.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={publicData.events} onSelectSubject={(subject, date) => selectSubject(subject, date)} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} onDataChanged={refreshPublicData} /> : view === "notes" ? <NotesBoard schedule={schedule} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
+        {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={publicData.events} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex max-w-5xl items-center gap-2 overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{publicData.events.filter((event) => event.status !== "cancelled").slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{publicData.events.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={publicData.events} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} /> : view === "notes" ? <NotesBoard schedule={schedule} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
     </div></div>
      {selectedSubject ? <SubjectModal subject={selectedSubject} sessions={schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId)} date={selectedDate ?? undefined} legacyEntryIds={[...schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id), ...scheduleSessions.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id)]} onClose={() => { setSelectedSubject(null); setSelectedDate(null); }} onOpenNotes={() => { setSelectedSubject(null); setSelectedDate(null); setView("notes"); }} /> : null}
   </main>;

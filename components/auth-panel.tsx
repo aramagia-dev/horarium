@@ -54,10 +54,18 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
   async function signIn(event: FormEvent) {
     event.preventDefault();
     if (!supabase) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+    if (normalizedEmail !== email) setEmail(normalizedEmail);
+    if (normalizedPassword !== password) setPassword(normalizedPassword);
+    if (!normalizedEmail || !normalizedPassword) {
+      setError("Completá email y contraseña sin espacios al inicio o final.");
+      return;
+    }
     setLoading(true);
     setError("");
     setSuccess("");
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password: normalizedPassword });
     if (signInError) setError("No se pudo iniciar sesión. Verificá tu email y contraseña.");
     else { setOpen(false); setPassword(""); }
     setLoading(false);
@@ -68,20 +76,32 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     if (!supabase) return;
     setError("");
     setSuccess("");
-    if (password.length < 8) {
-      setError("La contraseña debe tener al menos 8 caracteres.");
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+    const normalizedConfirmPassword = confirmPassword.trim();
+    const normalizedDisplayName = displayName.trim();
+    if (normalizedEmail !== email) setEmail(normalizedEmail);
+    if (normalizedPassword !== password) setPassword(normalizedPassword);
+    if (normalizedConfirmPassword !== confirmPassword) setConfirmPassword(normalizedConfirmPassword);
+    if (normalizedDisplayName !== displayName) setDisplayName(normalizedDisplayName);
+    if (!normalizedEmail) {
+      setError("Ingresá un email válido sin espacios al inicio o final.");
       return;
     }
-    if (password !== confirmPassword) {
+    if (normalizedPassword.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres sin contar espacios al inicio o final.");
+      return;
+    }
+    if (normalizedPassword !== normalizedConfirmPassword) {
       setError("Las contraseñas no coinciden.");
       return;
     }
 
     setLoading(true);
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/`, data: { display_name: displayName.trim() || undefined } },
+      email: normalizedEmail,
+      password: normalizedPassword,
+      options: { emailRedirectTo: `${window.location.origin}/`, data: { display_name: normalizedDisplayName || undefined } },
     });
     if (signUpError) {
       setError("No se pudo crear la cuenta. Verificá los datos e intentá de nuevo.");

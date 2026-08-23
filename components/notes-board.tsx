@@ -12,6 +12,7 @@ export function NotesBoard({ schedule }: { schedule: ScheduleEntry[] }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [authResolved, setAuthResolved] = useState(!supabase);
   const [remoteCounts, setRemoteCounts] = useState<Record<string, number>>({});
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState("");
   const [countsVersion, setCountsVersion] = useState(0);
@@ -66,11 +67,10 @@ export function NotesBoard({ schedule }: { schedule: ScheduleEntry[] }) {
   const selectedSessions = selectedSubject ? schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId) : [];
 
   return <section aria-label="Notas" className="mx-auto w-full max-w-[1440px]">
-    <div className="mb-7 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div><p className="text-xs font-bold tracking-[0.14em] text-[var(--accent)] uppercase">Espacio de estudio</p><h1 className="mt-1 text-[28px] font-bold tracking-[-0.04em] text-[var(--ink)]">Notas elaboradas</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">Organizá documentos con bloques, fechas, etiquetas y adjuntos. Las notas rápidas siguen disponibles desde Horario.</p></div>
-      <label className="block w-full lg:max-w-sm"><span className="sr-only">Buscar materias</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por materia, código o sección..." aria-label="Buscar materias" className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]" /></label>
+      <label className="block w-full lg:ml-auto lg:w-[360px] lg:max-w-[360px] shrink-0"><span className="sr-only">Buscar materias</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por materia, código o sección..." aria-label="Buscar materias" className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]" /></label>
     </div>
-    {loading ? <p role="status" className="mb-5 rounded-lg bg-[var(--soft)] px-3 py-2 text-xs text-[var(--muted)]">Cargando notas compartidas...</p> : null}
     {error ? <p role="alert" className="mb-5 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-600">{error}</p> : null}
     {filteredSubjects.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] px-6 py-12 text-center"><h2 className="text-lg font-semibold text-[var(--ink)]">{subjects.length === 0 ? "No hay materias disponibles" : "No encontramos materias"}</h2><p className="mt-2 text-sm text-[var(--muted)]">{subjects.length === 0 ? "El calendario todavía no tiene materias para seleccionar." : "Probá con otro término de búsqueda."}</p></div> : <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
       <nav aria-label="Materias con notas" className="space-y-2"><p className="px-1 text-xs font-bold tracking-[0.14em] text-[var(--muted)] uppercase">Materias</p>{filteredSubjects.map(({ subject, sections, count }) => <button key={subject.code} type="button" onClick={() => setSelectedCode(subject.code)} className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition ${selectedCode === subject.code ? "border-[var(--accent)] bg-[var(--sidebar-accent)]" : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--accent)]"}`}><span className="min-w-0"><span className="block text-[10px] font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{subject.code}</span><strong className="mt-1 block truncate text-sm font-bold text-[var(--ink)]">{subject.subject}</strong><span className="mt-1 block truncate text-xs text-[var(--muted)]">{sections.join(" · ")}</span></span><span className="ml-3 shrink-0 text-xs font-semibold text-[var(--accent)]">{count}</span></button>)}</nav>

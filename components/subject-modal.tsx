@@ -507,42 +507,35 @@ export function SubjectModal({
         aria-labelledby="subject-title"
         className={workspace ? "relative mx-auto flex min-h-full w-full max-w-5xl flex-col overflow-y-auto bg-[var(--surface)] px-4 py-8 sm:px-10 lg:px-16" : "relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-[var(--surface)] px-6 py-6 shadow-2xl sm:px-8"}
       >
-        <div className={workspace ? "flex items-center justify-between border-b border-[var(--line)] pb-4" : "flex items-center justify-between"}>
-          <span className={workspace ? "text-xs font-bold tracking-[0.14em] text-[var(--accent)] uppercase" : "rounded-full bg-[var(--soft)] px-3 py-1 text-[10px] font-bold tracking-[0.14em] text-[var(--accent)] uppercase"}>
+        {!workspace ? <div className="flex items-center justify-between">
+          <span className="rounded-full bg-[var(--soft)] px-3 py-1 text-[10px] font-bold tracking-[0.14em] text-[var(--accent)] uppercase">
             {subject.code}
           </span>
-          {!workspace ? <button
+          <button
             type="button"
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-[var(--muted)] hover:bg-[var(--soft)]"
             aria-label="Cerrar"
           >
             ×
-          </button> : null}
-        </div>
+          </button>
+        </div> : null}
 
         {workspace ? (
           <>
-            <div className="mt-8">
-              <span className="text-[10px] font-bold tracking-[0.16em] text-[var(--muted)] uppercase">Notas elaboradas</span>
-              <h2 id="subject-title" className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
-                {subject.subject}
-              </h2>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                {selectedSession ? `${formatDay(selectedSession.day)} · ${selectedSession.start} – ${selectedSession.end}` : "Contexto por materia"}
-              </p>
-            </div>
-
-            <div className="mt-6">
-              <div className="flex items-end justify-between px-1">
-                <div>
-                  <p className="text-xs font-bold tracking-[0.14em] text-[var(--accent)] uppercase">Notas compartidas</p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">Mantené el contexto cerca.</h3>
+            <div className="mt-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-[var(--soft)] px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{subject.code}</span>
+                  <span className="text-[10px] font-bold tracking-[0.14em] text-[var(--muted)] uppercase">Notas elaboradas</span>
                 </div>
                 <span className="text-xs text-[var(--muted)]">{notes.length} {notes.length === 1 ? "nota" : "notas"}</span>
               </div>
-              {message ? <p className="mt-4 rounded-lg bg-[var(--soft)] px-3 py-2 text-xs leading-5 text-[var(--muted)]">{message}</p> : null}
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <h2 id="subject-title" className="mt-3 text-[28px] font-bold tracking-[-0.04em] text-[var(--ink)] leading-none">{subject.subject}</h2>
+              <p className="mt-2 text-xs text-[var(--muted)]">{selectedSession ? `${formatDay(selectedSession.day)} · ${selectedSession.start} – ${selectedSession.end}` : "Contexto por materia"}</p>
+            </div>
+            <div className="mt-6 border-t border-[var(--line)] pt-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Filtros de notas">
                   {([
                     ["todas", `Todas (${filterCounts.todas})`],
@@ -570,6 +563,7 @@ export function SubjectModal({
                   <Plus size={14} aria-hidden="true" /> Nueva nota
                 </button>
               </div>
+              {message ? <p className="mt-4 rounded-lg bg-[var(--soft)] px-3 py-2 text-xs leading-5 text-[var(--muted)]">{message}</p> : null}
             </div>
 
             {isFormVisible ? (

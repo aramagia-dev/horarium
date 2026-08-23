@@ -362,20 +362,52 @@ export function SubjectModal({
       anchor.remove();
       return;
     }
-    // Remote: create a short-lived signed URL with proper filename so cross-origin download preserves name
-    const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrl(attachment.path, 60, { download: attachment.name });
-    const href = data?.signedUrl ?? attachment.url;
-    if (error || !href) {
-      setMessage("No se pudo generar el enlace de descarga.");
+    if (!attachment.url) {
+      setMessage("Enlace no disponible. Recargá las notas.");
       return;
     }
-    const anchor = document.createElement("a");
-    anchor.href = href;
-    anchor.download = attachment.name;
-    // Must be in DOM for Firefox
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+    // Prefer fetching the existing inline signedUrl as blob and downloading same-origin.
+    // This avoids a second createSignedUrl with `download` that was failing cross-account (filename encoding / RLS edge).
+    try {
+      const response = await fetch(attachment.url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = attachment.name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+      return;
+    } catch (fetchError) {
+      console.warn("[horarium] download via fetch failed, falling back to signedUrl with download disposition", fetchError);
+    }
+    // Fallback: try a short-lived signed URL with Content-Disposition: attachment so the browser honors the filename even cross-origin.
+    try {
+      const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrl(attachment.path, 60, { download: attachment.name });
+      const href = data?.signedUrl ?? "";
+      if (error || !href) throw error ?? new Error("empty href");
+      // Use window.open as ultimate fallback if anchor download is ignored cross-origin.
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = attachment.name;
+      anchor.target = "_blank";
+      anchor.rel = "noreferrer";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      // Also open as navigation fallback if download attribute is ignored.
+      window.setTimeout(() => {
+        if (document.visibilityState === "visible") window.open(href, "_blank", "noopener");
+      }, 300);
+    } catch (signedError) {
+      console.error("[horarium] signed download fallback failed", signedError);
+      // Last resort: open the inline URL directly — browser will at least show the PDF.
+      window.open(attachment.url, "_blank", "noopener");
+      setMessage("No se pudo forzar la descarga; se abrió el archivo en una pestaña nueva. Usá Guardar como allí.");
+    }
   }
 
   const NOTE_PREVIEW_LIMIT = 280;

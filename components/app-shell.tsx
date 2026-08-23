@@ -91,7 +91,7 @@ export default function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+  return <main className="min-h-screen max-w-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
     <motion.header
       initial={reduced ? false : { opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -101,7 +101,7 @@ export default function AppShell() {
       <div className="flex items-center gap-3"><button type="button" onClick={() => setDrawerOpen(true)} aria-label="Abrir navegación" aria-expanded={drawerOpen} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink)] transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] lg:hidden"><Menu size={18} aria-hidden="true" /></button><button type="button" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Mostrar navegación" : "Ocultar navegación"} aria-expanded={!sidebarCollapsed} className="hidden h-9 w-9 items-center justify-center rounded-lg text-[var(--ink)] transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] lg:flex">{sidebarCollapsed ? <PanelLeft size={18} aria-hidden="true" /> : <PanelLeftClose size={18} aria-hidden="true" />}</button><div className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] bg-[var(--accent)] text-white"><Clock3 size={18} aria-hidden="true" /></div><div><p className="text-[18px] font-bold tracking-tight text-[var(--ink)]">Horarium</p><p className="text-[10px] text-[var(--muted)]">Horario universitario</p></div></div>
         <div className="flex items-center gap-2"><ThemeToggle dark={dark} onToggle={toggleTheme} /><NotificationsBell onSelectEvent={selectEventById} onSelectNote={selectNoteFocus} onNavigateView={(v) => navigate(v)} /><AuthPanel /></div>
     </motion.header>
-    <div className="flex min-h-[calc(100vh-72px)]">
+    <div className="flex min-h-[calc(100vh-72px)] max-w-full min-w-0 overflow-x-hidden">
       <AnimatePresence initial={false}>
         {!sidebarCollapsed ? (
           <motion.div
@@ -117,7 +117,7 @@ export default function AppShell() {
         ) : null}
       </AnimatePresence>
       <MobileDrawer items={navItems} open={drawerOpen} view={view} onNavigate={navigate} onClose={() => setDrawerOpen(false)} />
-      <div className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
+      <div className="min-w-0 max-w-full flex-1 overflow-x-hidden px-4 py-6 sm:px-8 sm:py-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={view}
@@ -125,8 +125,9 @@ export default function AppShell() {
             initial="initial"
             animate="animate"
             exit="exit"
+            className="min-w-0 max-w-full overflow-x-hidden"
           >
-            {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={publicData.events} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex max-w-5xl items-center gap-2 overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{publicData.events.filter((event) => event.status !== "cancelled").slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{publicData.events.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={publicData.events} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} /> : view === "notes" ? <NotesBoard schedule={schedule} focus={notesFocus} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
+            {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={publicData.events} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex w-full max-w-full min-w-0 items-center gap-2 overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 sm:max-w-5xl"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{publicData.events.filter((event) => event.status !== "cancelled").slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{publicData.events.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={publicData.events} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} /> : view === "notes" ? <NotesBoard schedule={schedule} focus={notesFocus} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
           </motion.div>
         </AnimatePresence>
       </div>

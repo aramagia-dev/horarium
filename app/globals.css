@@ -38,7 +38,10 @@
 }
 
 * { box-sizing: border-box; }
-body { background: var(--background); color: var(--foreground); font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif; }
+html { max-width: 100%; overflow-x: hidden; }
+body { background: var(--background); color: var(--foreground); font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif; max-width: 100%; overflow-x: hidden; }
+img, video, iframe { max-width: 100%; }
+
 
 .accent-violet { --accent-card: #6558d8; background: #f0efff; border-color: #dad7ff; color: #30276d; }
 .accent-amber { --accent-card: #c88b18; background: #fff7e4; border-color: #f8e3b3; color: #704a0b; }

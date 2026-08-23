@@ -730,7 +730,7 @@ export function SubjectModal({
   const reduced = useReducedMotion();
 
   return (
-    <div className={workspace ? "min-h-full" : "fixed inset-0 z-50 flex justify-end"}>
+    <div className={workspace ? "min-h-full w-full max-w-full min-w-0 overflow-x-hidden" : "fixed inset-0 z-50 flex justify-end overflow-hidden"}>
       {!workspace ? <button
         type="button"
         className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
@@ -742,7 +742,7 @@ export function SubjectModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="subject-title"
-        className={workspace ? "relative mx-auto flex min-h-full w-full max-w-5xl flex-col overflow-y-auto bg-[var(--surface)] px-4 py-8 sm:px-10 lg:px-16" : "relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-[var(--surface)] px-6 py-6 shadow-2xl sm:px-8"}
+        className={workspace ? "relative mx-auto flex min-h-full w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-auto bg-[var(--surface)] px-4 py-6 sm:px-6 lg:px-10 xl:px-16" : "relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-[var(--surface)] px-6 py-6 shadow-2xl sm:px-8"}
       >
         {!workspace ? <div className="flex items-center justify-between">
           <span className="rounded-full bg-[var(--soft)] px-3 py-1 text-[10px] font-bold tracking-[0.14em] text-[var(--accent)] uppercase">
@@ -760,20 +760,20 @@ export function SubjectModal({
 
         {workspace ? (
           <>
-            <div className="mt-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-[var(--soft)] px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{subject.code}</span>
-                  <span className="text-[10px] font-bold tracking-[0.14em] text-[var(--muted)] uppercase">Notas elaboradas</span>
+            <div className="mt-2 min-w-0 max-w-full overflow-x-hidden">
+              <div className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0 rounded-full bg-[var(--soft)] px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{subject.code}</span>
+                  <span className="break-words text-[10px] font-bold tracking-[0.14em] text-[var(--muted)] uppercase">Notas elaboradas</span>
                 </div>
-                <span className="text-xs text-[var(--muted)]">{notes.length} {notes.length === 1 ? "nota" : "notas"}</span>
+                <span className="shrink-0 text-xs text-[var(--muted)]">{notes.length} {notes.length === 1 ? "nota" : "notas"}</span>
               </div>
-              <h2 id="subject-title" className="mt-3 text-[28px] font-bold tracking-[-0.04em] text-[var(--ink)] leading-none">{subject.subject}</h2>
-              <p className="mt-2 text-xs text-[var(--muted)]">{selectedSession ? `${formatDay(selectedSession.day)} · ${selectedSession.start} – ${selectedSession.end}` : "Contexto por materia"}</p>
+              <h2 id="subject-title" className="mt-3 min-w-0 max-w-full break-words text-[28px] font-bold tracking-[-0.04em] text-[var(--ink)] leading-none">{subject.subject}</h2>
+              <p className="mt-2 min-w-0 max-w-full break-words text-xs text-[var(--muted)]">{selectedSession ? `${formatDay(selectedSession.day)} · ${selectedSession.start} – ${selectedSession.end}` : "Contexto por materia"}</p>
             </div>
-            <div className="mt-6 border-t border-[var(--line)] pt-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2" role="group" aria-label="Filtros de notas">
+            <div className="mt-6 min-w-0 max-w-full overflow-x-hidden border-t border-[var(--line)] pt-6">
+              <div className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 max-w-full flex-wrap gap-2" role="group" aria-label="Filtros de notas">
                   {([
                     ["todas", `Todas (${filterCounts.todas})`],
                     ["mias", `Mías (${filterCounts.mias})`],
@@ -800,11 +800,11 @@ export function SubjectModal({
                   <Plus size={14} aria-hidden="true" /> Nueva nota
                 </button>
               </div>
-              {message ? <p className="mt-4 rounded-lg bg-[var(--soft)] px-3 py-2 text-xs leading-5 text-[var(--muted)]">{message}</p> : null}
+              {message ? <p className="mt-4 max-w-full break-words rounded-lg bg-[var(--soft)] px-3 py-2 text-xs leading-5 text-[var(--muted)]">{message}</p> : null}
             </div>
 
             {isFormVisible ? (
-              <form ref={formRef} onSubmit={saveNote} className="mt-6 space-y-5 rounded-xl border border-[var(--line)] bg-[var(--background)] p-4 shadow-sm sm:p-6">
+              <form ref={formRef} onSubmit={saveNote} className="mt-6 w-full max-w-full min-w-0 space-y-5 overflow-x-hidden rounded-xl border border-[var(--line)] bg-[var(--background)] p-4 shadow-sm sm:p-6">
                 <input
                   ref={titleInputRef}
                   value={draft.title}
@@ -814,21 +814,21 @@ export function SubjectModal({
                   placeholder="Título del documento"
                   aria-label="Título del documento"
                   role="searchbox"
-                  className="w-full border-0 bg-transparent px-0 py-2 text-3xl font-bold tracking-[-0.04em] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0 sm:text-4xl"
+                  className="w-full max-w-full min-w-0 break-words border-0 bg-transparent px-0 py-2 text-3xl font-bold tracking-[-0.04em] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0 sm:text-4xl"
                 />
-                <label className="block rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 text-xs font-semibold text-[var(--muted)]">
+                <label className="block w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 text-xs font-semibold text-[var(--muted)]">
                   <span className="flex items-center gap-2"><CalendarDays size={15} aria-hidden="true" /> Horario usado como contexto</span>
                   <select
                     value={selectedSessionId}
                     onChange={(event) => setDraft({ ...draft, sessionId: event.target.value })}
                     aria-label="Horario usado como contexto"
-                    className="schedule-context-select mt-2 w-full bg-transparent text-sm font-normal text-[var(--ink)] outline-none"
+                    className="schedule-context-select mt-2 w-full max-w-full bg-transparent text-sm font-normal text-[var(--ink)] outline-none"
                   >
                     <option value="">Toda la materia (sin horario específico)</option>
                     {sessions.map((session) => <option key={session.id} value={session.id}>{formatDay(session.day)} · {session.start} – {session.end} · {session.section} · {session.professor}</option>)}
                   </select>
                 </label>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-y border-[var(--line)] py-4 sm:grid-cols-4">
+                <div className="grid w-full max-w-full min-w-0 grid-cols-2 gap-x-4 gap-y-3 overflow-hidden border-y border-[var(--line)] py-4 sm:grid-cols-4">
                   {[
                     ["Profesor", contextSession.professor],
                     ["Sección", contextSession.section],
@@ -839,14 +839,14 @@ export function SubjectModal({
                       <p className="flex items-center gap-1 text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">
                         {label === "Profesor" ? <UserRound size={12} aria-hidden="true" /> : null}{label}
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                      <p className="mt-1 break-words text-sm font-semibold text-[var(--ink)]">
                         {value}
                       </p>
                     </div>
                   ))}
                 </div>
-                <div className="space-y-1" aria-label="Editor de bloques">
-                  {draft.blocks.map((block, index) => <div key={block.id} className="flex gap-2">
+                <div className="w-full max-w-full min-w-0 space-y-1 overflow-x-hidden" aria-label="Editor de bloques">
+                  {draft.blocks.map((block, index) => <div key={block.id} className="flex min-w-0 max-w-full gap-2 overflow-hidden">
                     <div ref={openBlockMenuId === block.id ? blockMenuRef : undefined} className="relative shrink-0 pt-2">
                       <button type="button" data-block-trigger={block.id} aria-label={`Cambiar tipo del bloque ${index + 1}`} aria-haspopup="menu" aria-expanded={openBlockMenuId === block.id} onClick={() => setOpenBlockMenuId(openBlockMenuId === block.id ? null : block.id)} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
                         <BlockIcon type={block.type} />
@@ -862,18 +862,18 @@ export function SubjectModal({
                       </div> : null}
                     </div>
                     {block.type === "checklist" ? <input type="checkbox" checked={Boolean(block.checked)} onChange={(event) => setDraft({ ...draft, blocks: draft.blocks.map((item) => item.id === block.id ? { ...item, checked: event.target.checked } : item) })} aria-label="Marcar checklist" className="mt-3 accent-[var(--accent)]" /> : null}
-                    <textarea value={block.text} onChange={(event) => setDraft({ ...draft, blocks: draft.blocks.map((item) => item.id === block.id ? { ...item, text: event.target.value } : item) })} rows={block.type === "heading" ? 1 : 2} placeholder={block.type === "heading" ? "Título del bloque" : "Escribí aquí... Usá / para ver comandos"} aria-label={`Texto del bloque ${index + 1}`} className={block.type === "heading" ? "min-w-0 flex-1 resize-y border-0 bg-transparent p-2 text-lg font-semibold leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0" : "min-w-0 flex-1 resize-y border-0 bg-transparent p-2 text-sm leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0"} />
+                    <textarea value={block.text} onChange={(event) => setDraft({ ...draft, blocks: draft.blocks.map((item) => item.id === block.id ? { ...item, text: event.target.value } : item) })} rows={block.type === "heading" ? 1 : 2} placeholder={block.type === "heading" ? "Título del bloque" : "Escribí aquí... Usá / para ver comandos"} aria-label={`Texto del bloque ${index + 1}`} className={block.type === "heading" ? "min-w-0 max-w-full flex-1 resize-y break-words border-0 bg-transparent p-2 text-lg font-semibold leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0" : "min-w-0 max-w-full flex-1 resize-y break-words border-0 bg-transparent p-2 text-sm leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-0"} />
                     <button type="button" onClick={() => setDraft({ ...draft, blocks: draft.blocks.filter((item) => item.id !== block.id) })} disabled={draft.blocks.length === 1} className="self-start px-1 py-2 text-xs text-[var(--muted)] opacity-0 transition hover:text-rose-500 focus-visible:opacity-100 disabled:opacity-0" aria-label="Eliminar bloque">×</button>
                   </div>)}
                   {draft.blocks.length === 1 && !draft.blocks[0].text ? <p className="ml-9 -mt-1 text-xs text-[var(--muted)]">Escribí aquí o usá / para ver comandos.</p> : null}
                   <button type="button" onClick={() => setDraft({ ...draft, blocks: [...draft.blocks, { id: crypto.randomUUID(), type: "paragraph", text: "" }] })} className="ml-9 mt-2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--accent)]">+ Agregar bloque</button>
                 </div>
-                <label className="block border-t border-[var(--line)] pt-4 text-xs font-semibold text-[var(--muted)]">Adjuntos (imágenes, PDF u Office)
-                  <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={(event) => setPendingFiles(Array.from(event.target.files ?? []))} className="mt-2 block w-full text-xs font-normal text-[var(--ink)]" />
-                  {pendingFiles.length > 0 ? <span className="mt-2 block font-normal">{pendingFiles.map((file) => file.name).join(", ")}</span> : null}
+                <label className="block w-full max-w-full min-w-0 overflow-hidden border-t border-[var(--line)] pt-4 text-xs font-semibold text-[var(--muted)]">Adjuntos (imágenes, PDF u Office)
+                  <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={(event) => setPendingFiles(Array.from(event.target.files ?? []))} className="mt-2 block w-full max-w-full text-xs font-normal text-[var(--ink)]" />
+                  {pendingFiles.length > 0 ? <span className="mt-2 block max-w-full break-words font-normal">{pendingFiles.map((file) => file.name).join(", ")}</span> : null}
                 </label>
-                <div className="grid gap-x-6 gap-y-3 border-t border-[var(--line)] pt-4 sm:grid-cols-2">
-                  <label className="text-xs font-semibold text-[var(--muted)]">
+                <div className="grid w-full max-w-full min-w-0 gap-x-6 gap-y-3 overflow-hidden border-t border-[var(--line)] pt-4 sm:grid-cols-2">
+                  <label className="min-w-0 text-xs font-semibold text-[var(--muted)]">
                     Fecha de la nota
                     <input
                       type="date"
@@ -886,7 +886,7 @@ export function SubjectModal({
                       className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm font-normal text-[var(--ink)]"
                     />
                   </label>
-                  <label className="text-xs font-semibold text-[var(--muted)]">
+                  <label className="min-w-0 text-xs font-semibold text-[var(--muted)]">
                     Etiquetas
                     <input
                       value={draft.tags}
@@ -896,11 +896,11 @@ export function SubjectModal({
                       placeholder="ej. parcial, teoría"
                       aria-label="Etiquetas separadas por comas"
                       role="searchbox"
-                      className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm font-normal text-[var(--ink)]"
+                      className="mt-1 w-full max-w-full rounded-xl border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm font-normal text-[var(--ink)]"
                     />
                   </label>
                 </div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-[var(--muted)]">
+                <label className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[var(--muted)]">
                   <input
                     type="checkbox"
                     checked={draft.status === "archived"}
@@ -913,7 +913,7 @@ export function SubjectModal({
                   />{" "}
                   Guardar como archivada
                 </label>
-                <div className="flex justify-end gap-2 border-t border-[var(--line)] pt-4">
+                <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--line)] pt-4">
                   <button
                     type="button"
                     onClick={handleCancelForm}
@@ -931,11 +931,11 @@ export function SubjectModal({
               </form>
             ) : null}
 
-            <motion.div className="mt-6 space-y-3 pb-10" variants={reduced ? undefined : staggerContainer} initial="hidden" animate="visible">
+            <motion.div className="mt-6 w-full max-w-full min-w-0 space-y-3 overflow-x-hidden pb-10" variants={reduced ? undefined : staggerContainer} initial="hidden" animate="visible">
               {loading ? (
                 <p className="text-sm text-[var(--muted)]">Cargando notas...</p>
               ) : filteredNotes.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[var(--line)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+                <div className="w-full max-w-full rounded-xl border border-dashed border-[var(--line)] px-4 py-6 text-center text-sm break-words text-[var(--muted)]">
                   {notes.length === 0 ? "Todavía no hay notas. Agregá la primera arriba." : "No hay notas para este filtro."}
                 </div>
               ) : (
@@ -954,17 +954,17 @@ export function SubjectModal({
                     variants={reduced ? undefined : staggerItem}
                     whileHover={reduced ? undefined : subtleCardHover}
                     transition={hoverTransition}
-                    className={`note-article rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
+                    className={`note-article w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <h4 className="font-semibold text-[var(--ink)]">
+                    <div className="flex min-w-0 max-w-full items-start justify-between gap-3 overflow-hidden">
+                      <h4 className="min-w-0 flex-1 break-words font-semibold text-[var(--ink)]">
                         {note.title}
                       </h4>
-                      <span className="rounded-full bg-[var(--soft)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">
+                      <span className="shrink-0 rounded-full bg-[var(--soft)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">
                         {note.status === "archived" ? "Archivada" : "Activa"}
                       </span>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-center gap-2 overflow-hidden">
                       <span className={isMine ? "inline-flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold text-white" : "inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold text-[var(--muted)]"}>
                         {badge.avatarUrl ? <img src={badge.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" /> : isMine ? <UserRound size={12} aria-hidden="true" /> : badge.initials ? <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--soft)] text-[8px] font-bold text-[var(--accent)]">{badge.initials.slice(0,2)}</span> : <Users size={12} aria-hidden="true" />}
                         <span className="max-w-[14ch] truncate">{badge.label}</span>
@@ -972,14 +972,14 @@ export function SubjectModal({
                     </div>
                     {note.session_id ? <p className="mt-2 flex items-center gap-1 text-xs text-[var(--muted)]"><CalendarDays size={13} aria-hidden="true" /> Contexto: {(() => { const noteSession = sessions.find((session) => session.id === note.session_id); return noteSession ? `${formatDay(noteSession.day)} · ${noteSession.start} – ${noteSession.end} · ${noteSession.section}` : "horario guardado"; })()}</p> : null}
                     {isLong && !isExpanded ? (
-                      <p className="mt-2 line-clamp-4 text-sm leading-6 text-[var(--ink)]">{preview}</p>
+                      <p className="mt-2 line-clamp-4 max-w-full break-words text-sm leading-6 text-[var(--ink)]">{preview}</p>
                     ) : isLong && isExpanded ? (
-                      <div className="mt-2 space-y-1 text-sm leading-6 text-[var(--ink)]">
-                        {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={block.type === "heading" ? "font-semibold" : ""}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
+                      <div className="mt-2 w-full max-w-full min-w-0 space-y-1 overflow-hidden text-sm leading-6 text-[var(--ink)]">
+                        {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={`break-words ${block.type === "heading" ? "font-semibold" : ""}`}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
                       </div>
                     ) : (
-                      <div className="mt-2 space-y-1 text-sm leading-6 text-[var(--ink)]">
-                        {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={block.type === "heading" ? "font-semibold" : ""}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
+                      <div className="mt-2 w-full max-w-full min-w-0 space-y-1 overflow-hidden text-sm leading-6 text-[var(--ink)]">
+                        {normalizeBlocks(note.blocks, note.content).map((block) => <div key={block.id} className={`break-words ${block.type === "heading" ? "font-semibold" : ""}`}>{block.type === "bullet" ? "• " : block.type === "checklist" ? `${block.checked ? "☑" : "☐"} ` : ""}{block.text}</div>)}
                       </div>
                     )}
                     {isLong ? (
@@ -1007,16 +1007,16 @@ export function SubjectModal({
                         ))}
                       </div>
                     ) : null}
-                    {(attachments[note.id] ?? note.attachments).length > 0 ? <div className="mt-3 space-y-2 border-t border-[var(--line)] pt-3">
+                    {(attachments[note.id] ?? note.attachments).length > 0 ? <div className="mt-3 w-full max-w-full min-w-0 space-y-2 overflow-hidden border-t border-[var(--line)] pt-3">
                       <p className="text-xs font-semibold text-[var(--muted)]">Adjuntos</p>
                       {(attachments[note.id] ?? note.attachments).map((attachment) => {
                         const isImage = isImageAttachment(attachment);
                         const isPdf = isPdfAttachment(attachment);
                         return (
-                          <div key={attachment.id} className="flex items-center gap-2 text-xs">
+                          <div key={attachment.id} className="flex w-full max-w-full min-w-0 items-center gap-2 overflow-hidden text-xs">
                             {isImage && attachment.url ? <img src={attachment.url} alt={attachment.name} className="h-10 w-10 shrink-0 rounded object-cover" /> : null}
                             {isPdf && !isImage ? <span className="shrink-0 rounded bg-[var(--soft)] px-1.5 py-1 text-[10px] font-bold text-[var(--accent)]">PDF</span> : null}
-                            <span className="min-w-0 flex-1 truncate text-[var(--ink)]" title={attachment.name}>{attachment.name}</span>
+                            <span className="min-w-0 flex-1 truncate break-all text-[var(--ink)]" title={attachment.name}>{attachment.name}</span>
                             {attachment.url ? (
                               isPdf || isImage ? (
                                 <button type="button" onClick={() => setPreviewAttachment(attachment)} className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Ver</button>
@@ -1030,7 +1030,7 @@ export function SubjectModal({
                         );
                       })}
                                         </div> : null}
-                    <div className="mt-3 border-t border-[var(--line)] pt-3">
+                    <div className="mt-3 w-full max-w-full min-w-0 overflow-hidden border-t border-[var(--line)] pt-3">
                       <p className="mb-2 text-xs font-semibold text-[var(--muted)]">Comentarios {(comments[note.id]?.length ?? 0) > 0 ? `· ${comments[note.id].length}` : ""}</p>
                       <div className="space-y-2">
                         {(comments[note.id] ?? []).map((c) => {
@@ -1056,7 +1056,7 @@ export function SubjectModal({
                       </div>
                       {supabase && userId ? <div className="mt-2.5 flex gap-2"><input value={commentDrafts[note.id] ?? ""} onChange={(e) => setCommentDrafts((s) => ({ ...s, [note.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleCreateComment(note.id); } }} maxLength={500} placeholder="Escribí un comentario..." className="flex-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--ink)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)]" /><button type="button" onClick={() => void handleCreateComment(note.id)} disabled={!(commentDrafts[note.id]?.trim())} className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">Enviar</button></div> : <p className="mt-2 text-[11px] text-[var(--muted)]">Iniciá sesión para comentar.</p>}
                     </div>
-                     <div className="mt-3 flex items-center justify-between">
+                     <div className="mt-3 flex w-full max-w-full min-w-0 flex-wrap items-center justify-between gap-2 overflow-hidden">
                       <time className="text-[10px] font-medium text-[var(--muted)]">
                         Actualizada{" "}
                         {new Date(note.updated_at).toLocaleDateString("es-AR", {
@@ -1225,16 +1225,16 @@ export function SubjectModal({
                         ))}
                       </div>
                     ) : null}
-                    {(attachments[note.id] ?? note.attachments).length > 0 ? <div className="mt-3 space-y-2 border-t border-[var(--line)] pt-3">
+                    {(attachments[note.id] ?? note.attachments).length > 0 ? <div className="mt-3 w-full max-w-full min-w-0 space-y-2 overflow-hidden border-t border-[var(--line)] pt-3">
                       <p className="text-xs font-semibold text-[var(--muted)]">Adjuntos</p>
                       {(attachments[note.id] ?? note.attachments).map((attachment) => {
                         const isImage = isImageAttachment(attachment);
                         const isPdf = isPdfAttachment(attachment);
                         return (
-                          <div key={attachment.id} className="flex items-center gap-2 text-xs">
+                          <div key={attachment.id} className="flex w-full max-w-full min-w-0 items-center gap-2 overflow-hidden text-xs">
                             {isImage && attachment.url ? <img src={attachment.url} alt={attachment.name} className="h-10 w-10 shrink-0 rounded object-cover" /> : null}
                             {isPdf && !isImage ? <span className="shrink-0 rounded bg-[var(--soft)] px-1.5 py-1 text-[10px] font-bold text-[var(--accent)]">PDF</span> : null}
-                            <span className="min-w-0 flex-1 truncate text-[var(--ink)]" title={attachment.name}>{attachment.name}</span>
+                            <span className="min-w-0 flex-1 truncate break-all text-[var(--ink)]" title={attachment.name}>{attachment.name}</span>
                             {attachment.url ? (
                               isPdf || isImage ? (
                                 <button type="button" onClick={() => setPreviewAttachment(attachment)} className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Ver</button>
@@ -1248,7 +1248,7 @@ export function SubjectModal({
                         );
                       })}
                                         </div> : null}
-                    <div className="mt-3 border-t border-[var(--line)] pt-3">
+                    <div className="mt-3 w-full max-w-full min-w-0 overflow-hidden border-t border-[var(--line)] pt-3">
                       <p className="mb-2 text-xs font-semibold text-[var(--muted)]">Comentarios {(comments[note.id]?.length ?? 0) > 0 ? `· ${comments[note.id].length}` : ""}</p>
                       <div className="space-y-2">
                         {(comments[note.id] ?? []).map((c) => {
@@ -1274,7 +1274,7 @@ export function SubjectModal({
                       </div>
                       {supabase && userId ? <div className="mt-2.5 flex gap-2"><input value={commentDrafts[note.id] ?? ""} onChange={(e) => setCommentDrafts((s) => ({ ...s, [note.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleCreateComment(note.id); } }} maxLength={500} placeholder="Escribí un comentario..." className="flex-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--ink)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)]" /><button type="button" onClick={() => void handleCreateComment(note.id)} disabled={!(commentDrafts[note.id]?.trim())} className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">Enviar</button></div> : <p className="mt-2 text-[11px] text-[var(--muted)]">Iniciá sesión para comentar.</p>}
                     </div>
-                     <div className="mt-3 flex items-center justify-between">
+                     <div className="mt-3 flex w-full max-w-full min-w-0 flex-wrap items-center justify-between gap-2 overflow-hidden">
                       <time className="text-[10px] font-medium text-[var(--muted)]">
                         Actualizada{" "}
                         {new Date(note.updated_at).toLocaleDateString("es-AR", {
@@ -1308,7 +1308,7 @@ export function SubjectModal({
         )}
       </aside>
       {previewAttachment ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreviewAttachment(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 p-4" onClick={() => setPreviewAttachment(null)}>
           <div ref={previewDialogRef as unknown as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="true" aria-label={`Vista previa de ${previewAttachment.name}`} className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-[var(--surface)] shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
               <p className="truncate text-sm font-semibold text-[var(--ink)]" title={previewAttachment.name}>{previewAttachment.name}</p>
@@ -1319,7 +1319,7 @@ export function SubjectModal({
             </div>
             <div className="flex-1 overflow-auto bg-[var(--soft)]">
               {isImageAttachment(previewAttachment) ? (
-                <img src={previewAttachment.url} alt={previewAttachment.name} className="mx-auto max-h-[80vh] w-auto object-contain" />
+                <img src={previewAttachment.url} alt={previewAttachment.name} className="mx-auto max-h-[80vh] w-auto max-w-full object-contain" />
               ) : isPdfAttachment(previewAttachment) ? (
                 <div className="flex h-[80vh] flex-col">
                   <iframe src={previewAttachment.url} title={previewAttachment.name} className="flex-1 w-full border-0 bg-white" />

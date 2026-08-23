@@ -88,8 +88,8 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   async function markCompleted(event: AcademicEvent) { const result = await saveAcademicEvent({ ...event, status: "completed" }); if (result.error) setError(result.error); else { const fresh = await loadAcademicEvents(); setEvents(fresh.events); onDataChanged?.(); } }
 
   return (
-    <section aria-label="Eventos" className="mx-auto max-w-5xl">
-      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <section aria-label="Eventos" className="mx-auto w-full max-w-5xl min-w-0 max-w-full overflow-x-hidden">
+      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-7 flex w-full max-w-full min-w-0 flex-wrap items-end justify-between gap-4 overflow-hidden">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Agenda compartida</p>
           <h1 className="mt-2 text-3xl font-bold tracking-[-0.04em] text-[var(--ink)]">Eventos</h1>
@@ -171,7 +171,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                 variants={withReducedMotion(staggerItem, reduced)}
                 whileHover={reduced ? undefined : subtleCardHover}
                 transition={hoverTransition}
-                className={`event-card rounded-2xl border bg-[var(--surface)] p-4 sm:p-5 ${event.id === selectedEventId ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30" : isEventOverdue(event) ? "border-rose-400/60" : "border-[var(--line)]"}`}
+                className={`event-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border bg-[var(--surface)] p-4 sm:p-5 ${event.id === selectedEventId ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30" : isEventOverdue(event) ? "border-rose-400/60" : "border-[var(--line)]"}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex min-w-0 gap-3">

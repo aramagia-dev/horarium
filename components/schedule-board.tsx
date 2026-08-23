@@ -38,8 +38,8 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
   function selectDate(value: string) { const date = parseDateInput(value); if (!date) return; setWeekStart(getWeekStart(date)); setActiveDay(dayForDate(date)); }
 
   return (
-    <section aria-label="Horario semanal">
-      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+    <section aria-label="Horario semanal" className="mx-auto w-full max-w-5xl min-w-0 max-w-full overflow-x-hidden">
+      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-6 flex w-full max-w-full min-w-0 flex-col justify-between gap-4 overflow-x-hidden xl:flex-row xl:items-center">
         <div>
           <h1 className="text-[22px] font-bold tracking-[-0.03em] text-[var(--ink)]">{formatWeekHeading(weekStart)}</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">Horario semanal de clases</p>
@@ -67,7 +67,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
         variants={withReducedMotion(staggerContainer, reduced)}
         initial="hidden"
         animate="visible"
-        className="mb-5 flex gap-2 overflow-x-auto pb-1 lg:hidden"
+        className="mb-5 flex w-full max-w-full min-w-0 gap-2 overflow-x-auto overflow-y-hidden pb-1 lg:hidden"
       >
         {days.map((day, index) => {
           const eventCount = events.filter((event) => event.date === formatDateInput(weekDates[index]) && event.status !== "cancelled").length;
@@ -93,7 +93,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
         variants={withReducedMotion(pageVariants, reduced)}
         initial="initial"
         animate="animate"
-        className="overflow-hidden rounded-[14px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(30,27,75,0.06)]"
+        className="w-full max-w-full min-w-0 overflow-hidden rounded-[14px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(30,27,75,0.06)]"
       >
         <div className="hidden min-w-[900px] lg:block">
           <div className="grid grid-cols-[74px_repeat(5,minmax(0,1fr))] border-b border-[var(--line)]">
@@ -135,7 +135,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
             </motion.div>
           </AnimatePresence>
         </div>
-        <div className="lg:hidden">
+        <div className="w-full max-w-full min-w-0 overflow-x-hidden lg:hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeDay + formatDateInput(weekStart)}
@@ -143,7 +143,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
               initial="hidden"
               animate="visible"
               exit="hidden"
-              className="space-y-3 p-4"
+              className="w-full max-w-full min-w-0 space-y-3 overflow-x-hidden p-4"
             >
               {schedule
                 .filter((item) => item.day === activeDay)
@@ -223,19 +223,19 @@ function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], on
       whileHover={reduced ? undefined : scheduleCardHover}
       whileTap={reduced ? undefined : { scale: 0.99 }}
       transition={hoverTransition}
-      className={`schedule-card accent-${entry.accent} relative flex min-h-[132px] w-full items-start gap-4 rounded-[20px] border px-4 py-5 text-left shadow-[0_8px_24px_rgba(30,27,75,0.04)]`}
+      className={`schedule-card accent-${entry.accent} relative flex min-h-[132px] w-full max-w-full min-w-0 items-start gap-4 overflow-hidden rounded-[20px] border px-4 py-5 text-left shadow-[0_8px_24px_rgba(30,27,75,0.04)]`}
     >
       <div className="w-[54px] shrink-0 border-r border-[var(--line)] pr-3 font-mono text-sm font-bold leading-6">
         <span className="block">{entry.start}</span>
         <span className="block font-normal opacity-60">{entry.end}</span>
       </div>
-      <div className="min-w-0 flex-1">
-        <strong className="block text-base font-bold leading-5">{entry.subject}</strong>
-        <span className="mt-1 block text-sm opacity-75">{entry.professor}</span>
-        <span className="mt-2 block text-sm opacity-75">⌖ {entry.room}</span>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <strong className="block break-words text-base font-bold leading-5">{entry.subject}</strong>
+        <span className="mt-1 block break-words text-sm opacity-75">{entry.professor}</span>
+        <span className="mt-2 block break-words text-sm opacity-75">⌖ {entry.room}</span>
         {sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} /> : null}
       </div>
-      <span className="rounded-full bg-white/60 px-2.5 py-1 text-[10px] font-bold">{entry.section.replace("Section ", "Sec ")}</span>
+      <span className="shrink-0 rounded-full bg-white/60 px-2.5 py-1 text-[10px] font-bold">{entry.section.replace("Section ", "Sec ")}</span>
     </motion.div>
   );
 }

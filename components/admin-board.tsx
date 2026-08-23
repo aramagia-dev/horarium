@@ -182,7 +182,7 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
   if (!authorized) return <AccessState title="Acceso restringido" text="Necesitás una sesión autenticada con rol de administrador para acceder a este panel." />;
 
   return (
-    <section aria-label="Administración" className="mx-auto max-w-6xl">
+    <section aria-label="Administración" className="mx-auto w-full max-w-6xl min-w-0 max-w-full overflow-x-hidden">
       <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-7">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Panel de control</p>
         <h1 className="mt-2 text-3xl font-bold tracking-[-0.04em] text-[var(--ink)]">Administrar horario</h1>

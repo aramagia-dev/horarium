@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   description: "Un horario universitario semanal compartido.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 const themeScript = `(function(){try{var k="horarium:theme";var v=localStorage.getItem(k);if(v==="dark")document.documentElement.classList.add("dark")}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

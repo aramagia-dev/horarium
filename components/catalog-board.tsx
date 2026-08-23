@@ -14,7 +14,7 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const reduced = useReducedMotion();
 
   return (
-    <section aria-label={title} className="mx-auto max-w-5xl">
+    <section aria-label={title} className="mx-auto w-full max-w-5xl min-w-0 max-w-full overflow-x-hidden">
       <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-7">
         <h1 className="text-[22px] font-bold tracking-[-0.03em] text-[var(--ink)]">{title}</h1>
         <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{description}</p>
@@ -24,14 +24,14 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
           <p className="text-sm text-[var(--muted)]">{kind === "rooms" ? "No hay aulas con clases asignadas esta semana." : kind === "professors" ? "No hay docentes con clases asignadas esta semana." : "No hay materias para mostrar."}</p>
         </motion.div>
       ) : (
-        <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="grid gap-4 sm:grid-cols-2">
+        <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="grid w-full max-w-full min-w-0 gap-4 overflow-hidden sm:grid-cols-2">
           {visibleGroups.map((group) => (
             <motion.article
               key={group.key}
               variants={withReducedMotion(staggerItem, reduced)}
               whileHover={reduced ? undefined : catalogCardHover}
               transition={hoverTransition}
-              className="catalog-card rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
+              className="catalog-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
             >
               <p className="text-xs font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{group.label}</p>
               {kind === "subjects" && group.items[0] ? (
@@ -43,7 +43,7 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                   className="mt-3 w-full rounded-xl bg-[var(--background)] p-4 text-left transition hover:border-[var(--accent)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                 >
                   <span className="text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">{group.items[0].code} · {Array.from(new Set(group.items.map((item) => item.section))).join(" · ")}</span>
-                  <strong className="mt-2 block text-sm text-[var(--ink)]">{group.title}</strong>
+                  <strong className="mt-2 block break-words text-sm text-[var(--ink)]">{group.title}</strong>
                   <span className="mt-2 block text-xs text-[var(--muted)]">{group.items.length} sesiones semanales</span>
                 </motion.button>
               ) : (
@@ -51,7 +51,7 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                   {group.items.map((entry) => (
                     <li key={entry.id}>
                       <button type="button" onClick={() => onSelectSubject(entry)} className="w-full rounded-lg px-2 py-2 text-left transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
-                        <span className="block text-sm font-semibold text-[var(--ink)]">{entry.subject}</span>
+                        <span className="block break-words text-sm font-semibold text-[var(--ink)]">{entry.subject}</span>
                         <span className="block text-xs text-[var(--muted)]">{dayLabel(entry.day)} · {entry.start}–{entry.end} · {entry.section}</span>
                       </button>
                     </li>

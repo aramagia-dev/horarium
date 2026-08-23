@@ -101,7 +101,7 @@ export default function AppShell() {
       <div className="flex items-center gap-3"><button type="button" onClick={() => setDrawerOpen(true)} aria-label="Abrir navegación" aria-expanded={drawerOpen} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink)] transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] lg:hidden"><Menu size={18} aria-hidden="true" /></button><button type="button" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Mostrar navegación" : "Ocultar navegación"} aria-expanded={!sidebarCollapsed} className="hidden h-9 w-9 items-center justify-center rounded-lg text-[var(--ink)] transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] lg:flex">{sidebarCollapsed ? <PanelLeft size={18} aria-hidden="true" /> : <PanelLeftClose size={18} aria-hidden="true" />}</button><div className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] bg-[var(--accent)] text-white"><Clock3 size={18} aria-hidden="true" /></div><div><p className="text-[18px] font-bold tracking-tight text-[var(--ink)]">Horarium</p><p className="text-[10px] text-[var(--muted)]">Horario universitario</p></div></div>
         <div className="flex items-center gap-2"><ThemeToggle dark={dark} onToggle={toggleTheme} /><NotificationsBell onSelectEvent={selectEventById} onSelectNote={selectNoteFocus} onNavigateView={(v) => navigate(v)} /><AuthPanel /></div>
     </motion.header>
-    <div className="flex min-h-[calc(100vh-72px)] max-w-full min-w-0 overflow-x-hidden">
+    <div className="flex min-h-[calc(100vh-72px)] max-w-full min-w-0 items-stretch overflow-x-hidden">
       <AnimatePresence initial={false}>
         {!sidebarCollapsed ? (
           <motion.div
@@ -110,7 +110,7 @@ export default function AppShell() {
             animate={{ width: 220, opacity: 1 }}
             exit={reduced ? { opacity: 0 } : { width: 0, opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="hidden shrink-0 overflow-hidden lg:block"
+            className="hidden shrink-0 self-stretch overflow-hidden lg:flex lg:flex-col"
           >
             <Sidebar items={navItems} view={view} onNavigate={navigate} />
           </motion.div>
@@ -138,7 +138,7 @@ export default function AppShell() {
 
 function LoadingState() { return <section aria-live="polite" className="mx-auto max-w-5xl rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-8 text-sm text-[var(--muted)]">Cargando horario…</section>; }
 
-function Sidebar({ items, view, onNavigate }: { items: NavItem[]; view: View; onNavigate: (view: View) => void }) { return <aside className="w-[220px] shrink-0 border-r border-[var(--line)] bg-[var(--sidebar)] p-4"><div className="mb-4"><p className="px-1 text-[10px] font-bold tracking-[0.14em] text-[var(--muted)] uppercase">Navegación</p></div><nav className="space-y-1" aria-label="Navegación principal">{items.map((item) => <NavItem key={item.view} {...item} active={view === item.view} onClick={() => onNavigate(item.view)} />)}</nav></aside>; }
+function Sidebar({ items, view, onNavigate }: { items: NavItem[]; view: View; onNavigate: (view: View) => void }) { return <aside className="flex w-[220px] flex-1 flex-col self-stretch border-r border-[var(--line)] bg-[var(--sidebar)] p-4 min-h-[calc(100vh-72px)]"><div className="mb-4"><p className="px-1 text-[10px] font-bold tracking-[0.14em] text-[var(--muted)] uppercase">Navegación</p></div><nav className="space-y-1" aria-label="Navegación principal">{items.map((item) => <NavItem key={item.view} {...item} active={view === item.view} onClick={() => onNavigate(item.view)} />)}</nav></aside>; }
 function MobileDrawer({ items, open, view, onNavigate, onClose }: { items: NavItem[]; open: boolean; view: View; onNavigate: (view: View) => void; onClose: () => void }) {
   const reduced = useReducedMotion();
   return (

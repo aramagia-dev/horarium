@@ -38,8 +38,8 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
   function selectDate(value: string) { const date = parseDateInput(value); if (!date) return; setWeekStart(getWeekStart(date)); setActiveDay(dayForDate(date)); }
 
   return (
-    <section aria-label="Horario semanal" className="mx-auto w-full max-w-5xl min-w-0 max-w-full overflow-x-hidden">
-      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-6 flex w-full max-w-full min-w-0 flex-col justify-between gap-4 overflow-x-hidden xl:flex-row xl:items-center">
+    <section aria-label="Horario semanal" className="mx-auto w-full max-w-5xl min-w-0 overflow-visible lg:overflow-visible">
+      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-6 flex w-full max-w-full min-w-0 flex-col justify-between gap-4 overflow-visible xl:flex-row xl:items-center">
         <div>
           <h1 className="text-[22px] font-bold tracking-[-0.03em] text-[var(--ink)]">{formatWeekHeading(weekStart)}</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">Horario semanal de clases</p>
@@ -93,9 +93,9 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
         variants={withReducedMotion(pageVariants, reduced)}
         initial="initial"
         animate="animate"
-        className="w-full max-w-full min-w-0 overflow-hidden rounded-[14px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(30,27,75,0.06)]"
+        className="w-full max-w-full min-w-0 overflow-hidden rounded-[14px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(30,27,75,0.06)] lg:overflow-visible"
       >
-        <div className="hidden min-w-[900px] lg:block">
+        <div className="hidden min-w-0 w-full lg:block">
           <div className="grid grid-cols-[74px_repeat(5,minmax(0,1fr))] border-b border-[var(--line)]">
             <div />
             {days.map((day, index) => {

@@ -86,3 +86,11 @@ body { background: var(--background); color: var(--foreground); font-family: var
 button:not(:disabled), a[href], select:not(:disabled), [role="button"] { cursor: pointer; }
 button:disabled, a[aria-disabled="true"], select:disabled { cursor: not-allowed; }
 label:has(input[type="checkbox"]), label:has(input[type="radio"]) { cursor: pointer; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

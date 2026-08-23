@@ -3,6 +3,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AtSign, Bell, CalendarCheck2, MessageCircle } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { dropdownVariants, useReducedMotion } from "@/lib/motion";
 import { useAuth } from "@/lib/auth-context";
 import { useSchedule } from "@/lib/schedule-context";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
@@ -159,6 +161,7 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
   };
 
   const disabled = !supabaseConfigured || !userId;
+  const reduced = useReducedMotion();
 
   return (
     <div ref={containerRef} className="relative">
@@ -181,12 +184,18 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
           </span>
         ) : null}
       </button>
-      {open ? (
-        <div
+      <AnimatePresence>
+        {open ? (
+        <motion.div
           ref={panelRef}
           role="dialog"
           aria-label="Notificaciones"
           aria-modal="false"
+          variants={reduced ? { hidden: { opacity: 0 }, visible: { opacity: 1 }, exit: { opacity: 0 } } : dropdownVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          style={{ originX: 1, originY: 0 }}
           className="absolute right-0 top-11 z-50 max-h-[min(70vh,480px)] w-[min(92vw,360px)] overflow-auto rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl"
         >
           <div className="sticky top-0 flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-4 py-3">
@@ -257,8 +266,9 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
               </ul>
             )}
           </div>
-        </div>
+        </motion.div>
       ) : null}
+      </AnimatePresence>
     </div>
   );
 }

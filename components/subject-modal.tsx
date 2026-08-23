@@ -36,6 +36,8 @@ import {
   type ScheduleSession,
 } from "@/lib/schedule-data";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
+import { motion } from "framer-motion";
+import { staggerContainer, staggerItem, useReducedMotion } from "@/lib/motion";
 
 type NoteComment = { id: string; note_id: string; author_id: string | null; content: string; created_at: string; updated_at: string };
 
@@ -725,6 +727,8 @@ export function SubjectModal({
     window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-block-option^="${openBlockMenuId}-"]`)?.focus());
   }, [openBlockMenuId]);
 
+  const reduced = useReducedMotion();
+
   return (
     <div className={workspace ? "min-h-full" : "fixed inset-0 z-50 flex justify-end"}>
       {!workspace ? <button
@@ -927,7 +931,7 @@ export function SubjectModal({
               </form>
             ) : null}
 
-            <div className="mt-6 space-y-3 pb-10">
+            <motion.div className="mt-6 space-y-3 pb-10" variants={reduced ? undefined : staggerContainer} initial="hidden" animate="visible">
               {loading ? (
                 <p className="text-sm text-[var(--muted)]">Cargando notas...</p>
               ) : filteredNotes.length === 0 ? (
@@ -944,9 +948,10 @@ export function SubjectModal({
                   const isMine = badge.isMine;
                   const isHighlighted = highlightNoteId === note.id;
                   return (
-                  <article
+                  <motion.article
                     key={note.id}
                     data-note-id={note.id}
+                    variants={reduced ? undefined : staggerItem}
                     className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1074,11 +1079,11 @@ export function SubjectModal({
                         </button>
                        </div> : <span className="text-xs text-[var(--muted)]">Solo lectura</span>}
                     </div>
-                  </article>
+                  </motion.article>
                   );
                 })
               )}
-            </div>
+            </motion.div>
           </>
         ) : (
           <>
@@ -1173,7 +1178,7 @@ export function SubjectModal({
                   const isMine = badge.isMine;
                   const isHighlighted = highlightNoteId === note.id;
                   return (
-                  <article
+                  <motion.article
                     key={note.id}
                     data-note-id={note.id}
                     className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
@@ -1290,7 +1295,7 @@ export function SubjectModal({
                         </button>
                        </div> : <span className="text-xs text-[var(--muted)]">Solo lectura</span>}
                     </div>
-                  </article>
+                  </motion.article>
                   );
                 })
               )}

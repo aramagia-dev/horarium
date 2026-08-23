@@ -6,6 +6,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { backdropVariants, dropdownVariants, modalVariants, useReducedMotion } from "@/lib/motion";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
@@ -26,6 +28,7 @@ function getExt(file: File): string {
 }
 
 export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) => void }) {
+  const reduced = useReducedMotion();
   const { user, userId, role, isAdmin, profileAlias, avatarUrl, refresh } = useAuth();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -261,8 +264,9 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
           </span>
           <span aria-hidden="true" className="hidden text-xs text-[var(--muted)] sm:inline">⌄</span>
         </button>
+        <AnimatePresence>
         {open ? (
-          <div ref={accountDialogRef} role="dialog" aria-modal="true" aria-label="Información de la cuenta" className="absolute right-0 top-12 z-50 w-[min(88vw,320px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-left shadow-2xl">
+          <motion.div ref={accountDialogRef} role="dialog" aria-modal="true" aria-label="Información de la cuenta" variants={reduced ? backdropVariants : dropdownVariants} initial="hidden" animate="visible" exit="exit" style={{ originX: 1, originY: 0 }} className="absolute right-0 top-12 z-50 w-[min(88vw,320px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-left shadow-2xl">
             <div className="flex items-center gap-3">
               <label className="group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-sm font-bold text-white focus-within:outline-2 focus-within:outline-[var(--accent)]" title="Cambiar foto (JPG/PNG/WebP, máx 2MB)">
                 {effectiveAvatar ? <img src={effectiveAvatar} alt="" className="h-full w-full object-cover" /> : initials}
@@ -287,8 +291,9 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
             </div>
 
             <button type="button" onClick={() => { setOpen(false); void signOut(); }} className="mt-4 w-full rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--soft)]">Salir</button>
-          </div>
+          </motion.div>
         ) : null}
+        </AnimatePresence>
       </div>
     );
   }
@@ -299,8 +304,9 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
   return (
     <div className="relative">
       <button type="button" onClick={() => { setOpen(true); setError(""); setSuccess(""); }} className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90">Iniciar sesión</button>
+      <AnimatePresence>
       {open ? (
-        <div ref={loginDialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" className="absolute right-0 top-12 z-50 w-[min(88vw,340px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 text-left shadow-2xl">
+        <motion.div ref={loginDialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" variants={reduced ? backdropVariants : modalVariants} initial="hidden" animate="visible" exit="exit" className="absolute right-0 top-12 z-50 w-[min(88vw,340px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 text-left shadow-2xl">
           <div className="flex items-center justify-between"><h2 id="auth-title" className="text-base font-semibold text-[var(--ink)]">{isRegistering ? "Crear cuenta" : "Iniciar sesión"}</h2><button type="button" onClick={() => setOpen(false)} aria-label="Cerrar autenticación" className="text-xl text-[var(--muted)]">×</button></div>
           <form onSubmit={isRegistering ? register : signIn} className="mt-4 space-y-3">
             <label className="block text-xs font-semibold text-[var(--muted)]">Email<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} /></label>
@@ -312,8 +318,9 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
             <button type="submit" disabled={loading} className="w-full rounded-lg bg-[var(--accent)] px-3 py-2.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60">{loading ? (isRegistering ? "Creando cuenta..." : "Ingresando...") : (isRegistering ? "Crear cuenta" : "Ingresar")}</button>
           </form>
           <button type="button" onClick={() => { setMode(isRegistering ? "login" : "register"); setError(""); setSuccess(""); }} className="mt-3 w-full text-center text-xs font-semibold text-[var(--accent)] hover:underline">{isRegistering ? "Ya tengo una cuenta" : "Crear una cuenta"}</button>
-        </div>
+        </motion.div>
       ) : null}
+      </AnimatePresence>
     </div>
   );
 }

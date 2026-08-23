@@ -129,6 +129,9 @@ img, video, iframe { max-width: 100%; }
   border-color: var(--accent);
 }
 
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Ensure every clickable element shows pointer — user requested explicit cursor feedback */
 button:not(:disabled), a[href], select:not(:disabled), [role="button"] { cursor: pointer; }
 button:disabled, a[aria-disabled="true"], select:disabled { cursor: not-allowed; }

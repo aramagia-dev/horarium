@@ -67,7 +67,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
         variants={withReducedMotion(staggerContainer, reduced)}
         initial="hidden"
         animate="visible"
-        className="mb-5 flex w-full max-w-full min-w-0 gap-2 overflow-x-auto overflow-y-hidden pb-1 lg:hidden"
+        className="mb-5 grid w-full max-w-full min-w-0 grid-cols-5 gap-2 overflow-visible py-1 lg:hidden"
       >
         {days.map((day, index) => {
           const eventCount = events.filter((event) => event.date === formatDateInput(weekDates[index]) && event.status !== "cancelled").length;
@@ -80,7 +80,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
               whileTap={reduced ? undefined : { scale: 0.98 }}
               onClick={() => setActiveDay(day)}
               aria-label={`${formatDay(day)} ${weekDates[index].getDate()}${eventCount ? `, ${eventCount} ${eventCount === 1 ? "evento académico" : "eventos académicos"}` : ""}`}
-              className={`min-w-[68px] rounded-[18px] border px-3 py-2.5 text-center transition ${activeDay === day ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-transparent bg-[var(--secondary)] text-[var(--muted)]"}`}
+              className={`w-full min-w-0 rounded-[18px] border px-2 py-2.5 text-center transition ${activeDay === day ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-transparent bg-[var(--secondary)] text-[var(--muted)]"}`}
             >
               <span className="block text-[11px] font-semibold">{formatDay(day)}</span>
               <span className={`mt-0.5 block text-lg font-bold ${activeDay === day ? "text-white" : "text-[var(--ink)]"}`}>{weekDates[index].getDate()}</span>

@@ -41,12 +41,9 @@ export default function Home() {
   const { publicData, refresh: refreshPublicData } = useSchedule();
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const isDark = window.localStorage.getItem(themeKey) === "dark";
-      setDark(isDark);
-      document.documentElement.classList.toggle("dark", isDark);
-    });
-    return () => window.cancelAnimationFrame(frame);
+    // El script bloqueante de layout ya aplicó la clase antes del paint.
+    // Sincronizar el estado React con el DOM evita FOUC y mismatch de icono.
+    setDark(document.documentElement.classList.contains("dark"));
   }, []);
 
   useEffect(() => {

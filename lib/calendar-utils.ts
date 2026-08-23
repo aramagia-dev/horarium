@@ -1,12 +1,4 @@
-import { days, type Day } from "@/lib/schedule-data";
-
-const dayNames: Record<Day, string> = {
-  Monday: "Lun",
-  Tuesday: "Mar",
-  Wednesday: "Mié",
-  Thursday: "Jue",
-  Friday: "Vie",
-};
+import { days, formatDay as canonicalFormatDay, type Day } from "@/lib/schedule-data";
 
 export function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -38,7 +30,7 @@ export function isSameLocalDay(first: Date, second: Date) {
 }
 
 export function formatDay(day: Day) {
-  return dayNames[day];
+  return canonicalFormatDay(day);
 }
 
 export function formatDateInput(date: Date) {

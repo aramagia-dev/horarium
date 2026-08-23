@@ -1,9 +1,10 @@
 -- Secure note mutations for an already-running Supabase project.
 -- Notes remain shared and readable; authors and admins may mutate them.
 
-grant select on public.notes to anon, authenticated;
+grant select on public.notes to authenticated;
 drop policy if exists "Public read notes" on public.notes;
-create policy "Public read notes" on public.notes for select to anon, authenticated using (true);
+drop policy if exists "Authenticated read notes" on public.notes;
+create policy "Authenticated read notes" on public.notes for select to authenticated using (true);
 
 drop policy if exists "Authenticated insert notes" on public.notes;
 create policy "Authenticated insert notes" on public.notes

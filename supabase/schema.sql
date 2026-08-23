@@ -140,7 +140,8 @@ create table if not exists public.note_attachments (
 create index if not exists note_attachments_note_idx on public.note_attachments(note_id, created_at);
 
 grant usage on schema public to anon, authenticated;
-grant select on public.subjects, public.professors, public.rooms, public.schedules, public.notes to anon, authenticated;
+grant select on public.subjects, public.professors, public.rooms, public.schedules to anon, authenticated;
+grant select on public.notes to authenticated;
 grant insert, update, delete on public.notes to authenticated;
 grant select on public.profiles to authenticated;
 
@@ -182,7 +183,8 @@ using (exists (select 1 from public.profiles where id = auth.uid() and role = 'a
 with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 drop policy if exists "Public read notes" on public.notes;
-create policy "Public read notes" on public.notes for select to anon, authenticated using (true);
+drop policy if exists "Authenticated read notes" on public.notes;
+create policy "Authenticated read notes" on public.notes for select to authenticated using (true);
 drop policy if exists "Authenticated insert notes" on public.notes;
 create policy "Authenticated insert notes" on public.notes for insert to authenticated with check (author_id = auth.uid());
 drop policy if exists "Authenticated update notes" on public.notes;

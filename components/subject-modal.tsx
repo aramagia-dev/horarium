@@ -34,6 +34,7 @@ import {
   type ScheduleEntry,
   type ScheduleSession,
 } from "@/lib/schedule-data";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 
 export function SubjectModal({
   subject,
@@ -79,6 +80,7 @@ export function SubjectModal({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<"todas" | "mias" | "companeros" | "archivadas">("todas");
   const [authorMap, setAuthorMap] = useState<Record<string, { display_name?: string | null; avatar_url?: string | null }>>({});
+  const dialogRef = useDialogA11y(!workspace, onClose);
 
   const selectedSessionId = sessions.length === 1 ? sessions[0].id : draft.sessionId;
   const selectedSession = sessions.find((session) => session.id === selectedSessionId);
@@ -483,6 +485,7 @@ export function SubjectModal({
         onClick={onClose}
       /> : null}
       <aside
+        ref={workspace ? undefined : dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="subject-title"

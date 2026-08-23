@@ -1,5 +1,6 @@
 "use client";
 
+/* Avatar previews use blob: URLs and public Supabase URLs; keep <img> intentionally. */
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable react-hooks/set-state-in-effect */
 
@@ -7,6 +8,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 
 export type AuthState = { userId: string | null; isAdmin: boolean };
 
@@ -44,6 +46,8 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
   const [aliasError, setAliasError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const accountDialogRef = useDialogA11y(open && Boolean(user), () => setOpen(false));
+  const loginDialogRef = useDialogA11y(open && !user, () => setOpen(false));
 
   // Compatibility: propagate context changes to legacy onAuthChange callback
   useEffect(() => {
@@ -61,6 +65,23 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       setAliasError("");
     }
   }, [open, user, profileAlias]);
+
+  // Cerrar al hacer click fuera del diálogo
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (accountDialogRef.current?.contains(target)) return;
+      if (loginDialogRef.current?.contains(target)) return;
+      const trigger = document.querySelector('[aria-label^="Abrir menú"], [aria-label="Iniciar sesión"]');
+      if (trigger?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+    // refs are stable — no need to list as deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Cleanup preview url — revoca el blob anterior al reemplazar o al desmontar
   useEffect(() => {
@@ -241,7 +262,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
           <span aria-hidden="true" className="hidden text-xs text-[var(--muted)] sm:inline">⌄</span>
         </button>
         {open ? (
-          <div role="dialog" aria-label="Información de la cuenta" className="absolute right-0 top-12 z-50 w-[min(88vw,320px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-left shadow-2xl">
+          <div ref={accountDialogRef} role="dialog" aria-modal="true" aria-label="Información de la cuenta" className="absolute right-0 top-12 z-50 w-[min(88vw,320px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-left shadow-2xl">
             <div className="flex items-center gap-3">
               <label className="group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-sm font-bold text-white focus-within:outline-2 focus-within:outline-[var(--accent)]" title="Cambiar foto (JPG/PNG/WebP, máx 2MB)">
                 {effectiveAvatar ? <img src={effectiveAvatar} alt="" className="h-full w-full object-cover" /> : initials}
@@ -279,7 +300,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     <div className="relative">
       <button type="button" onClick={() => { setOpen(true); setError(""); setSuccess(""); }} className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90">Iniciar sesión</button>
       {open ? (
-        <div role="dialog" aria-modal="true" aria-labelledby="auth-title" className="absolute right-0 top-12 z-50 w-[min(88vw,340px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 text-left shadow-2xl">
+        <div ref={loginDialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" className="absolute right-0 top-12 z-50 w-[min(88vw,340px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 text-left shadow-2xl">
           <div className="flex items-center justify-between"><h2 id="auth-title" className="text-base font-semibold text-[var(--ink)]">{isRegistering ? "Crear cuenta" : "Iniciar sesión"}</h2><button type="button" onClick={() => setOpen(false)} aria-label="Cerrar autenticación" className="text-xl text-[var(--muted)]">×</button></div>
           <form onSubmit={isRegistering ? register : signIn} className="mt-4 space-y-3">
             <label className="block text-xs font-semibold text-[var(--muted)]">Email<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} /></label>

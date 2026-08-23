@@ -201,7 +201,12 @@ function dayLabel(day: Day) { return ({ Monday: "Lunes", Tuesday: "Martes", Wedn
 function timesOverlap(start: string, end: string, otherStart: string, otherEnd: string) { const startMinutes = toMinutes(start); const endMinutes = toMinutes(end); const otherStartMinutes = toMinutes(otherStart); const otherEndMinutes = toMinutes(otherEnd); return startMinutes < otherEndMinutes && endMinutes > otherStartMinutes; }
 function toMinutes(value: string) { const [hours, minutes] = value.split(":").map(Number); return hours * 60 + minutes; }
 function normalizeName(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase().replace(/\s+/g, " "); }
-function serverError(message: string, code?: string) { return code === "23P01" || message.includes("exclusion") ? "No se pudo guardar: el intervalo se superpone con otra sesión del mismo día." : `No se pudo completar la operación. ${message}`; }
+function serverError(message: string, code?: string) {
+  if (code === "23P01" || message.toLowerCase().includes("exclusion") || message.toLowerCase().includes("overlap")) {
+    return "No se pudo guardar: el intervalo se superpone con otra sesión del mismo día. Recargá la lista e intentá de nuevo.";
+  }
+  return `No se pudo completar la operación. ${message}`;
+}
 function AccessState({ title, text }: { title: string; text: string }) { return <section aria-label="Administración" className="mx-auto max-w-3xl rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] px-6 py-14 text-center"><h1 className="text-xl font-semibold text-[var(--ink)]">{title}</h1><p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[var(--muted)]">{text}</p></section>; }
 function Metric({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) { return <div className={`rounded-xl border p-4 ${accent ? "border-[var(--accent)]/40 bg-[var(--accent)]/10" : "border-[var(--line)] bg-[var(--surface)]"}`}><p className="text-xs font-semibold text-[var(--muted)]">{label}</p><p className="mt-1 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">{value}</p></div>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-xs font-semibold text-[var(--muted)]">{label}<span className="mt-1 block">{children}</span></label>; }

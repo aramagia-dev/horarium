@@ -36,6 +36,8 @@ import {
 } from "@/lib/schedule-data";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 
+type NoteComment = { id: string; note_id: string; author_id: string | null; content: string; created_at: string; updated_at: string };
+
 export function SubjectModal({
   subject,
   sessions,
@@ -64,6 +66,10 @@ export function SubjectModal({
   });
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [attachments, setAttachments] = useState<Record<string, NoteAttachment[]>>({});
+  const [comments, setComments] = useState<Record<string, NoteComment[]>>({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(supabaseConfigured);
@@ -133,6 +139,8 @@ export function SubjectModal({
             ? ""
             : "Las notas se guardan en este navegador. Configurá Supabase para compartirlas.",
       );
+      setAttachments({});
+      setComments({});
       setLoading(false);
       return;
     }
@@ -169,6 +177,29 @@ export function SubjectModal({
           });
           setAttachments(grouped);
         } else setMessage((current) => current || "Los adjuntos requieren ejecutar la migración de Stage 2.");
+        const commentResult = await supabase!.from("note_comments").select("id, note_id, author_id, content, created_at, updated_at").in("note_id", noteIds).order("created_at", { ascending: true });
+        if (!commentResult.error) {
+          const rows = (commentResult.data ?? []) as NoteComment[];
+          const groupedComments: Record<string, NoteComment[]> = {};
+          const commentAuthorIds = new Set<string>();
+          rows.forEach((c) => { (groupedComments[c.note_id] ??= []).push(c); if (c.author_id) commentAuthorIds.add(c.author_id); });
+          setComments(groupedComments);
+          if (commentAuthorIds.size > 0) {
+            const noteAuthorIds = noteRows.map((n) => n.author_id).filter((id): id is string => typeof id === "string" && Boolean(id));
+            const allIds = Array.from(new Set([...noteAuthorIds, ...commentAuthorIds]));
+            const profileResult = await supabase!.from("profiles").select("id, display_name, avatar_url").in("id", allIds);
+            if (!profileResult.error && profileResult.data) {
+              const next: Record<string, { display_name?: string | null; avatar_url?: string | null }> = {};
+              for (const row of profileResult.data as Array<{ id: string; display_name?: string | null; avatar_url?: string | null }>) next[row.id] = { display_name: row.display_name ?? null, avatar_url: row.avatar_url ?? null };
+              if (Object.keys(next).length) setAuthorMap((prev) => ({ ...prev, ...next }));
+            }
+          }
+        } else {
+          setComments({});
+        }
+      } else {
+        setAttachments({});
+        setComments({});
       }
     }
     setLoading(false);
@@ -486,8 +517,10 @@ export function SubjectModal({
   }, []);
 
   useEffect(() => {
-    if (!supabase || !notes.length) return;
-    const authorIds = Array.from(new Set(notes.map((n) => n.author_id).filter((id): id is string => Boolean(id))));
+    if (!supabase) return;
+    const noteAuthorIds = notes.map((n) => n.author_id).filter((id): id is string => Boolean(id));
+    const commentAuthorIds = Object.values(comments).flat().map((c) => c.author_id).filter((id): id is string => Boolean(id));
+    const authorIds = Array.from(new Set([...noteAuthorIds, ...commentAuthorIds]));
     if (authorIds.length === 0) return;
     let active = true;
     void (async () => {
@@ -517,10 +550,49 @@ export function SubjectModal({
     return () => {
       active = false;
     };
-  }, [notes]);
+  }, [notes, comments]);
 
   const isRemote = Boolean(supabase && userId);
   const canMutateNote = (note: LocalNote) => !isRemote || isAdmin || note.author_id === userId;
+
+  function formatCommentTime(iso: string): string {
+    try { return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); } catch { return iso; }
+  }
+  function canMutateComment(c: NoteComment): boolean { return c.author_id === userId || isAdmin; }
+  async function handleCreateComment(noteId: string) {
+    const raw = commentDrafts[noteId] ?? "";
+    const trimmed = raw.trim();
+    if (!supabase || !userId) { setMessage("Iniciá sesión para comentar."); return; }
+    if (trimmed.length < 1 || trimmed.length > 500) return;
+    const { data, error } = await supabase.from("note_comments").insert({ note_id: noteId, author_id: userId, content: trimmed }).select("id, note_id, author_id, content, created_at, updated_at").single();
+    if (error) { setMessage("No se pudo guardar el comentario."); return; }
+    const inserted = data as NoteComment;
+    setComments((prev) => ({ ...prev, [noteId]: [...(prev[noteId] ?? []), inserted] }));
+    setCommentDrafts((s) => ({ ...s, [noteId]: "" }));
+    if (inserted.author_id && !authorMap[inserted.author_id]) {
+      const pr = await supabase.from("profiles").select("id, display_name, avatar_url").eq("id", inserted.author_id).maybeSingle();
+      if (pr.data) setAuthorMap((prev) => ({ ...prev, [inserted.author_id!]: { display_name: (pr.data as { display_name?: string | null }).display_name ?? null, avatar_url: (pr.data as { avatar_url?: string | null }).avatar_url ?? null } }));
+    }
+  }
+  async function handleUpdateComment(c: NoteComment) {
+    const trimmed = editingCommentText.trim();
+    if (!supabase || !userId) return;
+    if (trimmed.length < 1 || trimmed.length > 500) return;
+    if (!canMutateComment(c)) return;
+    const { data, error } = await supabase.from("note_comments").update({ content: trimmed }).eq("id", c.id).select("id, note_id, author_id, content, created_at, updated_at").single();
+    if (error) { setMessage("No se pudo actualizar el comentario."); return; }
+    const updated = data as NoteComment;
+    setComments((prev) => ({ ...prev, [updated.note_id]: (prev[updated.note_id] ?? []).map((x) => x.id === updated.id ? updated : x) }));
+    setEditingCommentId(null); setEditingCommentText("");
+  }
+  async function handleDeleteComment(c: NoteComment) {
+    if (!supabase || !userId) return;
+    if (!canMutateComment(c)) return;
+    const { error } = await supabase.from("note_comments").delete().eq("id", c.id);
+    if (error) { setMessage("No se pudo eliminar el comentario."); return; }
+    setComments((prev) => ({ ...prev, [c.note_id]: (prev[c.note_id] ?? []).filter((x) => x.id !== c.id) }));
+    if (editingCommentId === c.id) { setEditingCommentId(null); setEditingCommentText(""); }
+  }
 
   const editNote = (note: LocalNote) => {
     if (!canMutateNote(note)) return;
@@ -843,8 +915,33 @@ export function SubjectModal({
                           </div>
                         );
                       })}
-                    </div> : null}
-                    <div className="mt-3 flex items-center justify-between">
+                                        </div> : null}
+                    <div className="mt-3 border-t border-[var(--line)] pt-3">
+                      <p className="mb-2 text-xs font-semibold text-[var(--muted)]">Comentarios {(comments[note.id]?.length ?? 0) > 0 ? `· ${comments[note.id].length}` : ""}</p>
+                      <div className="space-y-2">
+                        {(comments[note.id] ?? []).map((c) => {
+                          const info = c.author_id ? authorMap[c.author_id] : null;
+                          const isOwn = c.author_id === userId;
+                          return (
+                            <div key={c.id} className="flex gap-2">
+                              {info?.avatar_url ? <img src={info.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" /> : <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">{(info?.display_name ?? "U")[0]?.toUpperCase()}</div>}
+                              <div className="min-w-0 flex-1 rounded-lg bg-[var(--soft)] px-2.5 py-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-[var(--ink)]">{info?.display_name ?? (isOwn ? "Vos" : "Usuario")}</span>
+                                  {isOwn ? <span className="rounded bg-[var(--accent)] px-1 py-0.5 text-[9px] font-bold text-white">Vos</span> : null}
+                                  <time className="text-[10px] text-[var(--muted)]">{formatCommentTime(c.created_at)}{c.created_at !== c.updated_at ? " · editado" : ""}</time>
+                                  {canMutateComment(c) ? <span className="ml-auto flex gap-1"><button type="button" onClick={() => { setEditingCommentId(c.id); setEditingCommentText(c.content); }} className="text-[10px] font-semibold text-[var(--accent)]">Editar</button><button type="button" onClick={() => void handleDeleteComment(c)} className="text-[10px] font-semibold text-rose-500">Eliminar</button></span> : null}
+                                </div>
+                                {editingCommentId === c.id ? <div className="mt-1.5 flex gap-1.5"><textarea value={editingCommentText} onChange={(e) => setEditingCommentText(e.target.value)} maxLength={500} rows={2} className="flex-1 rounded border border-[var(--line)] bg-white px-2 py-1 text-xs" /><button type="button" onClick={() => void handleUpdateComment(c)} className="shrink-0 rounded bg-[var(--accent)] px-2 py-1 text-xs font-semibold text-white">Guardar</button><button type="button" onClick={() => { setEditingCommentId(null); setEditingCommentText(""); }} className="shrink-0 rounded border border-[var(--line)] px-2 py-1 text-xs">Cancelar</button></div> : <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-[var(--ink)]">{c.content}</p>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(comments[note.id] ?? []).length === 0 ? <p className="text-xs text-[var(--muted)]">Sé el primero en comentar.</p> : null}
+                      </div>
+                      {supabase && userId ? <div className="mt-2.5 flex gap-2"><input value={commentDrafts[note.id] ?? ""} onChange={(e) => setCommentDrafts((s) => ({ ...s, [note.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleCreateComment(note.id); } }} maxLength={500} placeholder="Escribí un comentario..." className="flex-1 rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]" /><button type="button" onClick={() => void handleCreateComment(note.id)} disabled={!(commentDrafts[note.id]?.trim())} className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">Enviar</button></div> : <p className="mt-2 text-[11px] text-[var(--muted)]">Iniciá sesión para comentar.</p>}
+                    </div>
+                     <div className="mt-3 flex items-center justify-between">
                       <time className="text-[10px] font-medium text-[var(--muted)]">
                         Actualizada{" "}
                         {new Date(note.updated_at).toLocaleDateString("es-AR", {
@@ -1031,8 +1128,33 @@ export function SubjectModal({
                           </div>
                         );
                       })}
-                    </div> : null}
-                    <div className="mt-3 flex items-center justify-between">
+                                        </div> : null}
+                    <div className="mt-3 border-t border-[var(--line)] pt-3">
+                      <p className="mb-2 text-xs font-semibold text-[var(--muted)]">Comentarios {(comments[note.id]?.length ?? 0) > 0 ? `· ${comments[note.id].length}` : ""}</p>
+                      <div className="space-y-2">
+                        {(comments[note.id] ?? []).map((c) => {
+                          const info = c.author_id ? authorMap[c.author_id] : null;
+                          const isOwn = c.author_id === userId;
+                          return (
+                            <div key={c.id} className="flex gap-2">
+                              {info?.avatar_url ? <img src={info.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" /> : <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">{(info?.display_name ?? "U")[0]?.toUpperCase()}</div>}
+                              <div className="min-w-0 flex-1 rounded-lg bg-[var(--soft)] px-2.5 py-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-[var(--ink)]">{info?.display_name ?? (isOwn ? "Vos" : "Usuario")}</span>
+                                  {isOwn ? <span className="rounded bg-[var(--accent)] px-1 py-0.5 text-[9px] font-bold text-white">Vos</span> : null}
+                                  <time className="text-[10px] text-[var(--muted)]">{formatCommentTime(c.created_at)}{c.created_at !== c.updated_at ? " · editado" : ""}</time>
+                                  {canMutateComment(c) ? <span className="ml-auto flex gap-1"><button type="button" onClick={() => { setEditingCommentId(c.id); setEditingCommentText(c.content); }} className="text-[10px] font-semibold text-[var(--accent)]">Editar</button><button type="button" onClick={() => void handleDeleteComment(c)} className="text-[10px] font-semibold text-rose-500">Eliminar</button></span> : null}
+                                </div>
+                                {editingCommentId === c.id ? <div className="mt-1.5 flex gap-1.5"><textarea value={editingCommentText} onChange={(e) => setEditingCommentText(e.target.value)} maxLength={500} rows={2} className="flex-1 rounded border border-[var(--line)] bg-white px-2 py-1 text-xs" /><button type="button" onClick={() => void handleUpdateComment(c)} className="shrink-0 rounded bg-[var(--accent)] px-2 py-1 text-xs font-semibold text-white">Guardar</button><button type="button" onClick={() => { setEditingCommentId(null); setEditingCommentText(""); }} className="shrink-0 rounded border border-[var(--line)] px-2 py-1 text-xs">Cancelar</button></div> : <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-[var(--ink)]">{c.content}</p>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(comments[note.id] ?? []).length === 0 ? <p className="text-xs text-[var(--muted)]">Sé el primero en comentar.</p> : null}
+                      </div>
+                      {supabase && userId ? <div className="mt-2.5 flex gap-2"><input value={commentDrafts[note.id] ?? ""} onChange={(e) => setCommentDrafts((s) => ({ ...s, [note.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleCreateComment(note.id); } }} maxLength={500} placeholder="Escribí un comentario..." className="flex-1 rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]" /><button type="button" onClick={() => void handleCreateComment(note.id)} disabled={!(commentDrafts[note.id]?.trim())} className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">Enviar</button></div> : <p className="mt-2 text-[11px] text-[var(--muted)]">Iniciá sesión para comentar.</p>}
+                    </div>
+                     <div className="mt-3 flex items-center justify-between">
                       <time className="text-[10px] font-medium text-[var(--muted)]">
                         Actualizada{" "}
                         {new Date(note.updated_at).toLocaleDateString("es-AR", {

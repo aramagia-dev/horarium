@@ -70,7 +70,7 @@ export const dropdownVariants: Variants = {
 };
 
 // Return no-op variants when reduced motion is preferred (opacity only)
-export function withReducedMotion(variants: Variants, reduced: boolean): Variants {
+export function withReducedMotion(variants: Variants, reduced: boolean | null): Variants {
   if (!reduced) return variants;
   const out: Variants = {};
   for (const key of Object.keys(variants)) {

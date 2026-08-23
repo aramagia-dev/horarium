@@ -13,9 +13,9 @@ type ScheduleContextValue = {
 
 const ScheduleContext = createContext<ScheduleContextValue | undefined>(undefined);
 
-export function ScheduleProvider({ children }: { children: React.ReactNode }) {
-  const [publicData, setPublicData] = useState<PublicScheduleState | null>(null);
-  const [loading, setLoading] = useState(true);
+export function ScheduleProvider({ children, initialData }: { children: React.ReactNode; initialData?: PublicScheduleState | null }) {
+  const [publicData, setPublicData] = useState<PublicScheduleState | null>(initialData ?? null);
+  const [loading, setLoading] = useState(!initialData);
   const requestId = useRef(0);
   const mounted = useRef(true);
 
@@ -31,11 +31,11 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     mounted.current = true;
-    refresh();
+    if (!initialData) refresh();
     return () => {
       mounted.current = false;
     };
-  }, [refresh]);
+  }, [initialData, refresh]);
 
   const value = useMemo(() => ({ publicData, loading, refresh }), [publicData, loading, refresh]);
 

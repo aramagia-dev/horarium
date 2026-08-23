@@ -49,7 +49,8 @@ create index if not exists note_attachments_note_idx on public.note_attachments(
 grant select, insert, update, delete on public.note_attachments to authenticated;
 alter table public.note_attachments enable row level security;
 drop policy if exists "Users read own note attachments" on public.note_attachments;
-create policy "Users read own note attachments" on public.note_attachments for select to authenticated using (exists (select 1 from public.notes where notes.id = note_attachments.note_id));
+drop policy if exists "Users read note attachments" on public.note_attachments;
+create policy "Users read note attachments" on public.note_attachments for select to authenticated using (true);
 drop policy if exists "Users create own note attachments" on public.note_attachments;
 create policy "Users create own note attachments" on public.note_attachments for insert to authenticated with check (exists (select 1 from public.notes where notes.id = note_attachments.note_id and (notes.author_id = auth.uid() or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'))));
 drop policy if exists "Users update own note attachments" on public.note_attachments;
@@ -61,7 +62,7 @@ insert into storage.buckets (id, name, public) values ('note-attachments', 'note
 drop policy if exists "Users upload note attachments" on storage.objects;
 create policy "Users upload note attachments" on storage.objects for insert to authenticated with check (bucket_id = 'note-attachments' and ((storage.foldername(name))[1] = auth.uid()::text or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')));
 drop policy if exists "Users read note attachments" on storage.objects;
-create policy "Users read note attachments" on storage.objects for select to authenticated using (bucket_id = 'note-attachments' and exists (select 1 from public.note_attachments where storage_path = name));
+create policy "Users read note attachments" on storage.objects for select to authenticated using (bucket_id = 'note-attachments');
 drop policy if exists "Users delete note attachments" on storage.objects;
 create policy "Users delete note attachments" on storage.objects for delete to authenticated using (bucket_id = 'note-attachments' and ((storage.foldername(name))[1] = auth.uid()::text or exists (select 1 from public.note_attachments where storage_path = name and exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'))));
 drop policy if exists "Users update note attachments" on storage.objects;

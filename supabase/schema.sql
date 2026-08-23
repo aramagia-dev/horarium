@@ -223,7 +223,13 @@ create policy "Users update note attachments" on storage.objects for update to a
 
 drop policy if exists "Users read own profile" on public.profiles;
 drop policy if exists "Authenticated read profiles (alias+avatar)" on public.profiles;
-create policy "Authenticated read profiles (alias+avatar)" on public.profiles for select to authenticated using (true);
+create policy "Authenticated read profiles (alias+avatar)" on public.profiles for select to anon, authenticated using (true);
+grant select on public.profiles to anon, authenticated;
+grant update on public.profiles to authenticated;
+drop policy if exists "Users update own profile" on public.profiles;
+create policy "Users update own profile" on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists "Admins update any profile" on public.profiles;
+create policy "Admins update any profile" on public.profiles for update to authenticated using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')) with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 -- Avatars storage (public read, owner write, 2MB client-validated jpg/png/webp)
 insert into storage.buckets (id, name, public) values ('avatars','avatars', true) on conflict (id) do update set public = true;

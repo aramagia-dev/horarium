@@ -426,22 +426,44 @@ export function SubjectModal({
   };
 
   useEffect(() => {
+    const handleProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { userId?: string } | undefined;
+      const targetId = detail?.userId;
+      if (!targetId || !supabase) return;
+      void supabase.from("profiles").select("id, display_name, avatar_url").eq("id", targetId).maybeSingle().then(({ data }) => {
+        if (!data) return;
+        setAuthorMap((prev) => ({ ...prev, [targetId]: { display_name: (data as { display_name?: string | null }).display_name ?? null, avatar_url: (data as { avatar_url?: string | null }).avatar_url ?? null } }));
+      });
+    };
+    window.addEventListener("profile-updated", handleProfileUpdated as EventListener);
+    return () => window.removeEventListener("profile-updated", handleProfileUpdated as EventListener);
+  }, []);
+
+  useEffect(() => {
     if (!supabase || !notes.length) return;
     const authorIds = Array.from(new Set(notes.map((n) => n.author_id).filter((id): id is string => Boolean(id))));
     if (authorIds.length === 0) return;
-    const missing = authorIds.filter((id) => !(id in authorMap));
-    if (missing.length === 0) return;
     let active = true;
     void (async () => {
       try {
-        const result = await supabase.from("profiles").select("id, display_name, avatar_url").in("id", missing);
+        const result = await supabase.from("profiles").select("id, display_name, avatar_url").in("id", authorIds);
         if (!active) return;
         if (result.error || !result.data) return;
         const next: Record<string, { display_name?: string | null; avatar_url?: string | null }> = {};
         for (const row of result.data as Array<{ id: string; display_name?: string | null; avatar_url?: string | null }>) {
           next[row.id] = { display_name: row.display_name ?? null, avatar_url: row.avatar_url ?? null };
         }
-        if (Object.keys(next).length) setAuthorMap((prev) => ({ ...prev, ...next }));
+        if (Object.keys(next).length) setAuthorMap((prev) => {
+          // only update if something actually changed to avoid loops
+          let changed = false;
+          for (const id of Object.keys(next)) {
+            const prevEntry = prev[id];
+            const nextEntry = next[id];
+            if (!prevEntry || prevEntry.display_name !== nextEntry.display_name || prevEntry.avatar_url !== nextEntry.avatar_url) { changed = true; break; }
+          }
+          if (!changed && Object.keys(prev).length === Object.keys(next).length) return prev;
+          return { ...prev, ...next };
+        });
       } catch {
         // silent fallback to Vos/Compartida
       }
@@ -449,7 +471,7 @@ export function SubjectModal({
     return () => {
       active = false;
     };
-  }, [notes, authorMap]);
+  }, [notes]);
 
   const isRemote = Boolean(supabase && userId);
   const canMutateNote = (note: LocalNote) => !isRemote || isAdmin || note.author_id === userId;

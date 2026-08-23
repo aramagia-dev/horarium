@@ -109,10 +109,12 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, [onAuthChange, updateUser]);
 
-  // Sincronizar draft al abrir
+  // Sincronizar draft solo al abrir (no al cambiar profileAlias mientras está abierto)
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (open && user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza draft controlado al abrir, requerido por spec 2A
+    const justOpened = open && !prevOpenRef.current;
+    prevOpenRef.current = open;
+    if (justOpened && user) {
       setAliasDraft(profileAlias || "");
       setAliasMessage("");
       setAliasError("");
@@ -223,6 +225,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       setProfileAlias(aliasTrim);
       if (duplicateWarning) setAliasMessage(duplicateWarning);
       else setAliasMessage("Alias guardado.");
+      window.dispatchEvent(new CustomEvent("profile-updated", { detail: { userId: user.id } }));
       // refrescar estado user para que header tome alias
       await updateUser({ ...user, user_metadata: { ...(user.user_metadata ?? {}), display_name: aliasTrim } });
     } catch (e) {
@@ -261,6 +264,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       try { await supabase.auth.updateUser({ data: { avatar_url: publicUrl } }); } catch { /* compat */ }
       setAvatarUrlState(publicUrl);
       setAliasMessage("Foto actualizada.");
+      window.dispatchEvent(new CustomEvent("profile-updated", { detail: { userId: user.id } }));
       await updateUser({ ...user, user_metadata: { ...(user.user_metadata ?? {}), avatar_url: publicUrl } });
     } catch (e) {
       setAliasError(e instanceof Error ? e.message : "No se pudo subir la foto.");
@@ -310,7 +314,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
             <div className="mt-4 space-y-2">
               <label className="block text-xs font-semibold text-[var(--muted)]">Alias (2–24 caracteres)</label>
               <div className="flex gap-2">
-                <input value={aliasDraft} onChange={(e) => setAliasDraft(e.target.value)} maxLength={ALIAS_MAX} placeholder="Tu alias" aria-label="Alias" className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]" />
+                <input value={aliasDraft} onChange={(e) => setAliasDraft(e.target.value)} maxLength={ALIAS_MAX} placeholder="Tu alias" aria-label="Alias" autoComplete="nickname" spellCheck={false} className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]" />
                 <button type="button" onClick={() => void handleAliasSave()} disabled={aliasSaving || avatarUploading} className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60">{aliasSaving ? "Guardando..." : "Guardar"}</button>
               </div>
               {aliasError ? <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-1.5 text-xs text-rose-600">{aliasError}</p> : null}

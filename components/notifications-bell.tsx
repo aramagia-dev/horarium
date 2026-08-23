@@ -17,11 +17,11 @@ import {
 
 type Props = {
   onSelectEvent?: (eventId: string) => void;
-  onSelectNote?: (subjectId: string | null, noteId: string | null) => void;
+  onSelectNote?: (subjectId: string | null, noteId: string | null, commentId?: string | null) => void;
   onNavigateView?: (view: "events" | "notes") => void;
 };
 
-export function NotificationsBell({ onSelectEvent, onNavigateView }: Props) {
+export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView }: Props) {
   const { userId } = useAuth();
   const { publicData } = useSchedule();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -135,11 +135,19 @@ export function NotificationsBell({ onSelectEvent, onNavigateView }: Props) {
       else if (onNavigateView) onNavigateView("events");
       else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events", eventId: n.event_id } }));
     } else if (n.note_id) {
-      // Solo abrir Notas — no disparar SubjectModal global (barra derecha)
-      if (onNavigateView) onNavigateView("notes");
-      else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "notes", noteId: n.note_id } }));
-      // Si en el futuro se quiere resaltar la nota específica, NotasBoard puede
-      // escuchar horarium:navigate y expandir esa nota por noteId sin abrir modal.
+      // Obtener subject_id para dirigir a la materia correcta y resaltar la nota
+      let subjectId: string | null = null;
+      if (supabase) {
+        try {
+          const { data } = await supabase.from("notes").select("subject_id").eq("id", n.note_id).maybeSingle();
+          subjectId = (data as { subject_id?: string } | null)?.subject_id ?? null;
+        } catch {
+          // ignore — navega igual sin materia específica
+        }
+      }
+      const commentId = (n as { comment_id?: string | null }).comment_id ?? null;
+      if (onSelectNote) onSelectNote(subjectId, n.note_id, commentId);
+      else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "notes", noteId: n.note_id, subjectId, commentId } }));
     }
   };
 

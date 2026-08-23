@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
 /* Signed Supabase URLs and local data URLs are intentionally rendered without Next image optimization. */
 /* eslint-disable @next/next/no-img-element */
 
@@ -46,6 +47,8 @@ export function SubjectModal({
   onClose,
   workspace = false,
   onOpenNotes,
+  highlightNoteId = null,
+  highlightCommentId = null,
 }: {
   subject: ScheduleEntry;
   sessions: ScheduleSession[];
@@ -54,6 +57,8 @@ export function SubjectModal({
   onClose: () => void;
   workspace?: boolean;
   onOpenNotes?: () => void;
+  highlightNoteId?: string | null;
+  highlightCommentId?: string | null;
 }) {
   const [notes, setNotes] = useState<LocalNote[]>([]);
   const [draft, setDraft] = useState({
@@ -495,6 +500,39 @@ export function SubjectModal({
     return notes;
   })();
 
+  // Al llegar desde una notificación, asegurar que la nota esté visible, expandida y scrolleada
+  useEffect(() => {
+    if (!highlightNoteId) return;
+    if (notes.length === 0) return;
+    const target = notes.find((note) => note.id === highlightNoteId);
+    if (!target) return;
+    // Si el filtro actual ocultaría la nota, forzar "todas"
+    const wouldBeHidden =
+      filter === "mias" ? target.author_id !== userId :
+      filter === "companeros" ? target.author_id === userId || target.author_id == null :
+      filter === "archivadas" ? target.status !== "archived" : false;
+    if (wouldBeHidden) setFilter("todas");
+    setExpandedIds((prev) => {
+      if (prev.has(highlightNoteId)) return prev;
+      const next = new Set(prev);
+      next.add(highlightNoteId);
+      return next;
+    });
+    // esperar a que el DOM se actualice con la expansión y el filtro
+    const esc = (value: string) => (typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(value) : value.replace(/"/g, '\\"'));
+    const raf = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-note-id="${esc(highlightNoteId)}"]`) as HTMLElement | null;
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (highlightCommentId) {
+          const cel = document.querySelector(`[data-comment-id="${esc(highlightCommentId)}"]`) as HTMLElement | null;
+          if (cel) cel.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      });
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [highlightNoteId, highlightCommentId, notes, filter, userId]);
+
   const filterCounts = {
     todas: notes.length,
     mias: notes.filter((n) => n.author_id === userId).length,
@@ -904,10 +942,12 @@ export function SubjectModal({
                   const preview = isLong && !isExpanded ? truncateAtWordBoundary(plain, NOTE_PREVIEW_LIMIT) : plain;
                   const badge = authorBadgeInfo(note);
                   const isMine = badge.isMine;
+                  const isHighlighted = highlightNoteId === note.id;
                   return (
                   <article
                     key={note.id}
-                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}`}
+                    data-note-id={note.id}
+                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold text-[var(--ink)]">
@@ -989,8 +1029,9 @@ export function SubjectModal({
                         {(comments[note.id] ?? []).map((c) => {
                           const info = c.author_id ? authorMap[c.author_id] : null;
                           const isOwn = c.author_id === userId;
+                          const isCommentHighlighted = highlightCommentId === c.id;
                           return (
-                            <div key={c.id} className="flex gap-2">
+                            <div key={c.id} data-comment-id={c.id} className={`flex gap-2 ${isCommentHighlighted ? "rounded-lg ring-2 ring-[var(--accent)] ring-offset-1 p-1 -m-1 bg-[var(--accent)]/5" : ""}`}>
                               {info?.avatar_url ? <img src={info.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" /> : <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">{(info?.display_name ?? "U")[0]?.toUpperCase()}</div>}
                               <div className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5">
                                 <div className="flex items-center gap-1.5">
@@ -1130,10 +1171,12 @@ export function SubjectModal({
                 filteredNotes.map((note) => {
                   const badge = authorBadgeInfo(note);
                   const isMine = badge.isMine;
+                  const isHighlighted = highlightNoteId === note.id;
                   return (
                   <article
                     key={note.id}
-                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}`}
+                    data-note-id={note.id}
+                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold text-[var(--ink)]">
@@ -1202,8 +1245,9 @@ export function SubjectModal({
                         {(comments[note.id] ?? []).map((c) => {
                           const info = c.author_id ? authorMap[c.author_id] : null;
                           const isOwn = c.author_id === userId;
+                          const isCommentHighlighted = highlightCommentId === c.id;
                           return (
-                            <div key={c.id} className="flex gap-2">
+                            <div key={c.id} data-comment-id={c.id} className={`flex gap-2 ${isCommentHighlighted ? "rounded-lg ring-2 ring-[var(--accent)] ring-offset-1 p-1 -m-1 bg-[var(--accent)]/5" : ""}`}>
                               {info?.avatar_url ? <img src={info.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" /> : <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">{(info?.display_name ?? "U")[0]?.toUpperCase()}</div>}
                               <div className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5">
                                 <div className="flex items-center gap-1.5">

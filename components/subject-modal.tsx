@@ -703,7 +703,7 @@ export function SubjectModal({
               </form>
             ) : null}
 
-            <div className="mt-6 space-y-5 pb-10">
+            <div className="mt-6 space-y-3 pb-10">
               {loading ? (
                 <p className="text-sm text-[var(--muted)]">Cargando notas...</p>
               ) : filteredNotes.length === 0 ? (
@@ -721,7 +721,7 @@ export function SubjectModal({
                   return (
                   <article
                     key={note.id}
-                    className={`border-t py-5 ${isMine ? "border-l-2 border-[var(--accent)] bg-[var(--soft)]/35 pl-4" : "border-[var(--line)] pl-1"} ${note.status === "archived" ? "opacity-70" : ""} ${isMine ? "rounded-r-xl" : ""}`}
+                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold text-[var(--ink)]">
@@ -907,7 +907,7 @@ export function SubjectModal({
                   return (
                   <article
                     key={note.id}
-                    className={`rounded-xl border border-[var(--line)] bg-[var(--background)] p-4 ${note.status === "archived" ? "opacity-70" : ""}`}
+                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold text-[var(--ink)]">

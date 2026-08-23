@@ -56,11 +56,23 @@ function writeLocalEvents(events: AcademicEvent[]) {
 }
 
 export function isEventOverdue(event: AcademicEvent) {
-  return event.status === "pending" && event.date < new Date().toISOString().slice(0, 10);
+  if (event.status !== "pending") return false;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, "0")}-${`${now.getDate()}`.padStart(2, "0")}`;
+  if (event.date < today) return true;
+  if (event.date > today) return false;
+  if (!event.time) return false;
+  const timeHHMM = event.time.slice(0, 5);
+  const nowHHMM = `${`${now.getHours()}`.padStart(2, "0")}:${`${now.getMinutes()}`.padStart(2, "0")}`;
+  return nowHHMM > timeHHMM;
 }
 
 export function formatEventDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
+}
+
+export function formatEventMonthShort(value: string): string {
+  return new Date(`${value}T12:00:00`).toLocaleDateString("es-AR", { month: "short" }).replace(".", "").toUpperCase();
 }
 
 export async function loadAcademicEvents(): Promise<{ events: AcademicEvent[]; source: "supabase" | "local"; error: string }> {

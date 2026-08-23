@@ -11,6 +11,7 @@ create table if not exists public.profiles (
   role text not null default 'user' check (role in ('user', 'admin')),
   created_at timestamptz not null default now()
 );
+alter table public.profiles add column if not exists avatar_url text;
 
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public
@@ -221,7 +222,20 @@ drop policy if exists "Users update note attachments" on storage.objects;
 create policy "Users update note attachments" on storage.objects for update to authenticated using (bucket_id = 'note-attachments' and ((storage.foldername(name))[1] = auth.uid()::text or exists (select 1 from public.note_attachments where storage_path = name and exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')))) with check (bucket_id = 'note-attachments' and ((storage.foldername(name))[1] = auth.uid()::text or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')));
 
 drop policy if exists "Users read own profile" on public.profiles;
-create policy "Users read own profile" on public.profiles for select to authenticated using (id = auth.uid());
+drop policy if exists "Authenticated read profiles (alias+avatar)" on public.profiles;
+create policy "Authenticated read profiles (alias+avatar)" on public.profiles for select to authenticated using (true);
+
+-- Avatars storage (public read, owner write, 2MB client-validated jpg/png/webp)
+insert into storage.buckets (id, name, public) values ('avatars','avatars', true) on conflict (id) do update set public = true;
+drop policy if exists "Public read avatars" on storage.objects;
+create policy "Public read avatars" on storage.objects for select to anon, authenticated using (bucket_id = 'avatars');
+drop policy if exists "Users upload own avatar" on storage.objects;
+create policy "Users upload own avatar" on storage.objects for insert to authenticated with check (bucket_id='avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "Users update own avatar" on storage.objects;
+create policy "Users update own avatar" on storage.objects for update to authenticated using (bucket_id='avatars' and (storage.foldername(name))[1] = auth.uid()::text) with check (bucket_id='avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "Users delete own avatar" on storage.objects;
+create policy "Users delete own avatar" on storage.objects for delete to authenticated using (bucket_id='avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+alter table public.profiles add column if not exists avatar_url text;
 
 -- Canonical subjects from lib/schedule-data.ts. Schedule rows are intentionally
 -- not seeded until professor/room mappings are confirmed by an administrator.

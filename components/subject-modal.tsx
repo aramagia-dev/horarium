@@ -78,7 +78,7 @@ export function SubjectModal({
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<"todas" | "mias" | "companeros" | "archivadas">("todas");
-  const [authorMap, setAuthorMap] = useState<Record<string, { display_name?: string | null; email?: string | null }>>({});
+  const [authorMap, setAuthorMap] = useState<Record<string, { display_name?: string | null; avatar_url?: string | null }>>({});
 
   const selectedSessionId = sessions.length === 1 ? sessions[0].id : draft.sessionId;
   const selectedSession = sessions.find((session) => session.id === selectedSessionId);
@@ -387,19 +387,17 @@ export function SubjectModal({
     return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   }
 
-  function authorBadgeInfo(note: LocalNote): { label: string; initials: string; isMine: boolean } {
+  function authorBadgeInfo(note: LocalNote): { label: string; initials: string; isMine: boolean; avatarUrl: string | null } {
     const isMine = Boolean(userId && note.author_id === userId);
-    if (isMine) return { label: "Vos", initials: "V", isMine: true };
-    if (note.author_id && authorMap[note.author_id]?.display_name) {
-      const name = authorMap[note.author_id].display_name!.trim();
-      return { label: name, initials: initialsFromName(name), isMine: false };
+    const authorEntry = note.author_id ? authorMap[note.author_id] : undefined;
+    const avatarUrl = authorEntry?.avatar_url?.trim() ? authorEntry.avatar_url!.trim() : null;
+    if (isMine) return { label: "Vos", initials: "V", isMine: true, avatarUrl };
+    if (note.author_id && authorEntry?.display_name) {
+      const name = authorEntry.display_name!.trim();
+      return { label: name || "Compartida", initials: initialsFromName(name || "C"), isMine: false, avatarUrl };
     }
-    if (note.author_id && authorMap[note.author_id]?.email) {
-      const email = authorMap[note.author_id].email!.trim();
-      return { label: email, initials: email.slice(0, 2).toUpperCase(), isMine: false };
-    }
-    if (note.author_id) return { label: "Compartida", initials: "C", isMine: false };
-    return { label: "Compartida", initials: "C", isMine: false };
+    if (note.author_id) return { label: "Compartida", initials: "C", isMine: false, avatarUrl };
+    return { label: "Compartida", initials: "C", isMine: false, avatarUrl: null };
   }
 
   const toggleExpanded = (id: string) => {
@@ -436,23 +434,12 @@ export function SubjectModal({
     let active = true;
     void (async () => {
       try {
-        const result = await supabase.from("profiles").select("id, display_name").in("id", missing);
+        const result = await supabase.from("profiles").select("id, display_name, avatar_url").in("id", missing);
         if (!active) return;
         if (result.error || !result.data) return;
-        const next: Record<string, { display_name?: string | null; email?: string | null }> = {};
-        for (const row of result.data as Array<{ id: string; display_name?: string | null }>) {
-          next[row.id] = { display_name: row.display_name ?? null };
-        }
-        try {
-          const withEmail = await supabase.from("profiles").select("id, email").in("id", missing);
-          if (!withEmail.error && withEmail.data) {
-            for (const row of withEmail.data as Array<{ id: string; email?: string | null }>) {
-              if (next[row.id]) next[row.id].email = row.email ?? null;
-              else next[row.id] = { display_name: null, email: row.email ?? null };
-            }
-          }
-        } catch {
-          // ignore missing column
+        const next: Record<string, { display_name?: string | null; avatar_url?: string | null }> = {};
+        for (const row of result.data as Array<{ id: string; display_name?: string | null; avatar_url?: string | null }>) {
+          next[row.id] = { display_name: row.display_name ?? null, avatar_url: row.avatar_url ?? null };
         }
         if (Object.keys(next).length) setAuthorMap((prev) => ({ ...prev, ...next }));
       } catch {
@@ -724,7 +711,7 @@ export function SubjectModal({
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className={isMine ? "inline-flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold text-white" : "inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold text-[var(--muted)]"}>
-                        {isMine ? <UserRound size={12} aria-hidden="true" /> : badge.initials ? <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--soft)] text-[8px] font-bold text-[var(--accent)]">{badge.initials.slice(0,2)}</span> : <Users size={12} aria-hidden="true" />}
+                        {badge.avatarUrl ? <img src={badge.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" /> : isMine ? <UserRound size={12} aria-hidden="true" /> : badge.initials ? <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--soft)] text-[8px] font-bold text-[var(--accent)]">{badge.initials.slice(0,2)}</span> : <Users size={12} aria-hidden="true" />}
                         <span className="max-w-[14ch] truncate">{badge.label}</span>
                       </span>
                     </div>
@@ -910,7 +897,7 @@ export function SubjectModal({
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className={isMine ? "inline-flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold text-white" : "inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold text-[var(--muted)]"}>
-                        {isMine ? <UserRound size={12} aria-hidden="true" /> : badge.initials ? <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--soft)] text-[8px] font-bold text-[var(--accent)]">{badge.initials.slice(0,2)}</span> : <Users size={12} aria-hidden="true" />}
+                        {badge.avatarUrl ? <img src={badge.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" /> : isMine ? <UserRound size={12} aria-hidden="true" /> : badge.initials ? <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--soft)] text-[8px] font-bold text-[var(--accent)]">{badge.initials.slice(0,2)}</span> : <Users size={12} aria-hidden="true" />}
                         <span className="max-w-[14ch] truncate">{badge.label}</span>
                       </span>
                     </div>

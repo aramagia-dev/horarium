@@ -1,8 +1,11 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { FormEvent, useEffect, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import { days, scheduleSessions as localScheduleSessions, subjects as localSubjects, type Accent, type Day } from "@/lib/schedule-data";
 
 type Subject = { id: string; code: string; name: string; accent: Accent };
@@ -17,6 +20,7 @@ const emptyRoom = { name: "" };
 const emptySchedule = { subject_id: "", professor_id: "", room_id: "", day: "Monday" as Day, section: "", start_time: "", end_time: "" };
 
 export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
+  const { isAdmin, loading: authLoading } = useAuth();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -57,21 +61,12 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
   }
 
   useEffect(() => {
-    let active = true;
-    async function checkAccess() {
-      if (!supabaseConfigured || !supabase) { setAuthorized(false); setLoading(false); return; }
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      if (!user) { if (active) { setAuthorized(false); setLoading(false); } return; }
-      const { data: profile, error: profileError } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-      if (!active) return;
-      if (profileError || profile?.role !== "admin") { setAuthorized(false); setLoading(false); return; }
-      setAuthorized(true);
-      await loadData();
-    }
-    void checkAccess();
-    return () => { active = false; };
-  }, []);
+    if (!supabaseConfigured || !supabase) { setAuthorized(false); setLoading(false); return; }
+    if (authLoading) { setAuthorized(null); return; }
+    if (!isAdmin) { setAuthorized(false); setLoading(false); return; }
+    setAuthorized(true);
+    void loadData();
+  }, [authLoading, isAdmin]);
 
   async function mutate(action: () => Promise<{ error: { message: string; code?: string } | null }>) {
     setPending(true);

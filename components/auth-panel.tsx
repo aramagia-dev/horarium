@@ -1,12 +1,13 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 
-type AuthUser = { id: string; email?: string; user_metadata?: Record<string, unknown> };
 export type AuthState = { userId: string | null; isAdmin: boolean };
 
 const ALIAS_MIN = 2;
@@ -23,8 +24,7 @@ function getExt(file: File): string {
 }
 
 export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) => void }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const { user, userId, role, isAdmin, profileAlias, avatarUrl, refresh } = useAuth();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -37,9 +37,6 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Perfil editable
-  const [profileAlias, setProfileAlias] = useState<string>("");
-  const [avatarUrlState, setAvatarUrlState] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [aliasSaving, setAliasSaving] = useState(false);
@@ -48,66 +45,10 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const updateUser = useCallback(async (nextUser: AuthUser | null) => {
-    setUser(nextUser);
-    setRole(null);
-    if (!nextUser) {
-      setProfileAlias("");
-      setAvatarUrlState(null);
-      setAliasDraft("");
-      setAliasMessage("");
-      setAliasError("");
-      setAvatarPreview(null);
-      onAuthChange?.({ userId: null, isAdmin: false });
-      return;
-    }
-    const client = supabase;
-    if (!client) {
-      // fallback a metadata
-      const meta = nextUser.user_metadata ?? {};
-      const metaName = typeof meta.display_name === "string" ? meta.display_name.trim() : "";
-      const metaAvatar = typeof meta.avatar_url === "string" ? meta.avatar_url.trim() : "";
-      setProfileAlias(metaName);
-      setAvatarUrlState(metaAvatar || null);
-      onAuthChange?.({ userId: nextUser.id, isAdmin: false });
-      return;
-    }
-    try {
-      const { data } = await client.from("profiles").select("role, display_name, avatar_url").eq("id", nextUser.id).maybeSingle();
-      const meta = nextUser.user_metadata ?? {};
-      const metaName = typeof meta.display_name === "string" ? meta.display_name.trim() : "";
-      const metaAvatar = typeof meta.avatar_url === "string" ? meta.avatar_url.trim() : "";
-      const dbName = typeof data?.display_name === "string" ? data.display_name.trim() : "";
-      const dbAvatar = typeof data?.avatar_url === "string" ? data.avatar_url.trim() : "";
-      setRole(data?.role ?? null);
-      setProfileAlias(dbName || metaName || "");
-      setAvatarUrlState(dbAvatar || metaAvatar || null);
-      onAuthChange?.({ userId: nextUser.id, isAdmin: data?.role === "admin" });
-    } catch {
-      const meta = nextUser.user_metadata ?? {};
-      const metaName = typeof meta.display_name === "string" ? meta.display_name.trim() : "";
-      const metaAvatar = typeof meta.avatar_url === "string" ? meta.avatar_url.trim() : "";
-      setProfileAlias(metaName);
-      setAvatarUrlState(metaAvatar || null);
-      onAuthChange?.({ userId: nextUser.id, isAdmin: false });
-    }
-  }, [onAuthChange]);
-
+  // Compatibility: propagate context changes to legacy onAuthChange callback
   useEffect(() => {
-    const client = supabase;
-    if (!client) {
-      onAuthChange?.({ userId: null, isAdmin: false });
-      return;
-    }
-    let active = true;
-    async function loadSession() {
-      const { data } = await client!.auth.getSession();
-      if (active) await updateUser(data.session?.user ?? null);
-    }
-    const { data: listener } = client!.auth.onAuthStateChange((_event, session) => void updateUser(session?.user ?? null));
-    void loadSession();
-    return () => { active = false; listener.subscription.unsubscribe(); };
-  }, [onAuthChange, updateUser]);
+    onAuthChange?.({ userId, isAdmin });
+  }, [userId, isAdmin, onAuthChange]);
 
   // Sincronizar draft solo al abrir (no al cambiar profileAlias mientras está abierto)
   const prevOpenRef = useRef(false);
@@ -127,6 +68,14 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     };
   }, [avatarPreview]);
+
+  // Clear preview when user changes (logout)
+  useEffect(() => {
+    if (!user && avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+      setAvatarPreview(null);
+    }
+  }, [user, avatarPreview]);
 
   async function signIn(event: FormEvent) {
     event.preventDefault();
@@ -213,7 +162,6 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     }
     setAliasSaving(true);
     try {
-      // warning si duplicado (case-insensitive) 2A no bloquea
       let duplicateWarning = "";
       try {
         const { data: dup } = await supabase.from("profiles").select("id").ilike("display_name", aliasTrim).neq("id", user.id).limit(1);
@@ -224,12 +172,10 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       const { error: updErr } = await supabase.from("profiles").update({ display_name: aliasTrim }).eq("id", user.id);
       if (updErr) throw updErr;
       try { await supabase.auth.updateUser({ data: { display_name: aliasTrim } }); } catch { /* compat */ }
-      setProfileAlias(aliasTrim);
       if (duplicateWarning) setAliasMessage(duplicateWarning);
       else setAliasMessage("Alias guardado.");
       window.dispatchEvent(new CustomEvent("profile-updated", { detail: { userId: user.id } }));
-      // refrescar estado user para que header tome alias
-      await updateUser({ ...user, user_metadata: { ...(user.user_metadata ?? {}), display_name: aliasTrim } });
+      await refresh();
     } catch (e) {
       setAliasError(e instanceof Error ? e.message : "No se pudo guardar el alias.");
     } finally {
@@ -249,7 +195,6 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       setAliasError("La foto debe pesar menos de 2MB.");
       return;
     }
-    // preview local — el useEffect revoca el blob anterior al cambiar
     const previewUrl = URL.createObjectURL(file);
     setAvatarPreview(previewUrl);
     setAvatarUploading(true);
@@ -263,10 +208,9 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       const { error: updErr } = await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
       if (updErr) throw updErr;
       try { await supabase.auth.updateUser({ data: { avatar_url: publicUrl } }); } catch { /* compat */ }
-      setAvatarUrlState(publicUrl);
       setAliasMessage("Foto actualizada.");
       window.dispatchEvent(new CustomEvent("profile-updated", { detail: { userId: user.id } }));
-      await updateUser({ ...user, user_metadata: { ...(user.user_metadata ?? {}), avatar_url: publicUrl } });
+      await refresh();
     } catch (e) {
       setAliasError(e instanceof Error ? e.message : "No se pudo subir la foto.");
       setAvatarPreview(null);
@@ -282,7 +226,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     const metadataAvatar = typeof metadata.avatar_url === "string" ? metadata.avatar_url.trim() : "";
     const alias = profileAlias || metadataName || "";
     const name = alias || "Usuario";
-    const effectiveAvatar = avatarPreview || avatarUrlState || metadataAvatar || null;
+    const effectiveAvatar = avatarPreview || avatarUrl || metadataAvatar || null;
     const initials = name.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
     return (
       <div className="relative">

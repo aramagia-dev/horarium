@@ -1,19 +1,22 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { useEffect, useState } from "react";
 import { SubjectModal } from "@/components/subject-modal";
 import { notesChangedEvent, readLocalNotes } from "@/lib/notes-storage";
 import type { ScheduleEntry } from "@/lib/schedule-data";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 
 export function NotesBoard({ schedule }: { schedule: ScheduleEntry[] }) {
   const [query, setQuery] = useState("");
   const [selectedCode, setSelectedCode] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
-  const [authResolved, setAuthResolved] = useState(!supabase);
+  const { userId } = useAuth();
+  const authResolved = true;
   const [remoteCounts, setRemoteCounts] = useState<Record<string, number>>({});
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [loading, setLoading] = useState(Boolean(supabase));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countsVersion, setCountsVersion] = useState(0);
   const subjectGroups = Array.from(new Map(schedule.map((entry) => [entry.code, entry])).values()).map((subject) => ({
@@ -22,23 +25,17 @@ export function NotesBoard({ schedule }: { schedule: ScheduleEntry[] }) {
   }));
 
   useEffect(() => {
-    if (!supabase) return;
-    let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setUserId(data.session?.user?.id ?? null);
-      setAuthResolved(true);
-      setLoading(Boolean(data.session?.user?.id));
-      setRemoteCounts({});
-    }).catch(() => { if (active) { setUserId(null); setAuthResolved(true); setLoading(false); } });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) { setUserId(session?.user?.id ?? null); setLoading(Boolean(session?.user?.id)); setError(""); setRemoteCounts({}); }
-    });
-    return () => { active = false; listener.subscription.unsubscribe(); };
-  }, []);
+    // keep loading/error in sync with auth changes (previously via duplicated auth listener)
+    setRemoteCounts({});
+    setError("");
+    setLoading(Boolean(supabase && userId));
+  }, [userId]);
 
   useEffect(() => {
-    if (!authResolved || !supabase || !userId) return;
+    if (!authResolved || !supabase || !userId) {
+      if (!userId) setLoading(false);
+      return;
+    }
     let active = true;
     const subjectIds = Array.from(new Set(schedule.map((entry) => entry.subjectId)));
     if (subjectIds.length === 0) return () => { active = false; };

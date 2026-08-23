@@ -28,6 +28,7 @@ import {
   type NoteStatus,
 } from "@/lib/notes-storage";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import {
   formatDay,
   type ScheduleEntry,
@@ -70,8 +71,7 @@ export function SubjectModal({
       ? ""
       : "Las notas se guardan en este navegador. Configurá Supabase para compartirlas.",
   );
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { userId, isAdmin } = useAuth();
   const [openBlockMenuId, setOpenBlockMenuId] = useState<string | null>(null);
   const blockMenuRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -112,35 +112,6 @@ export function SubjectModal({
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [openBlockMenuId]);
-
-  useEffect(() => {
-    if (!supabase) return;
-    let active = true;
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (active) {
-        const nextUserId = data.session?.user?.id ?? null;
-        setUserId(nextUserId);
-        if (nextUserId) {
-          const profile = await supabase!.from("profiles").select("role").eq("id", nextUserId).maybeSingle();
-          if (active) setIsAdmin(profile.data?.role === "admin");
-        } else setIsAdmin(false);
-      }
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (active) {
-          const nextUserId = session?.user?.id ?? null;
-          setUserId(nextUserId);
-          if (nextUserId) void supabase!.from("profiles").select("role").eq("id", nextUserId).maybeSingle().then(({ data }) => { if (active) setIsAdmin(data?.role === "admin"); });
-          else setIsAdmin(false);
-        }
-      },
-    );
-    return () => {
-      active = false;
-      listener.subscription.unsubscribe();
-    };
-  }, []);
 
   const loadNotes = useCallback(async () => {
     const useLocal = !supabase || !userId;

@@ -235,7 +235,7 @@ function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], on
         <span className="mt-2 block break-words text-sm opacity-75">⌖ {entry.room}</span>
         {sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} /> : null}
       </div>
-      <span className="shrink-0 rounded-full bg-white/60 px-2.5 py-1 text-[10px] font-bold">{entry.section.replace("Section ", "Sec ")}</span>
+      <span className="shrink-0 rounded-full border border-black/5 bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide text-slate-700 shadow-sm dark:border-white/10 dark:bg-white dark:text-slate-800">{entry.section.replace("Section ", "Sec ")}</span>
     </motion.div>
   );
 }

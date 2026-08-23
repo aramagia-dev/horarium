@@ -80,7 +80,9 @@ export function SubjectModal({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<"todas" | "mias" | "companeros" | "archivadas">("todas");
   const [authorMap, setAuthorMap] = useState<Record<string, { display_name?: string | null; avatar_url?: string | null }>>({});
+  const [previewAttachment, setPreviewAttachment] = useState<NoteAttachment | null>(null);
   const dialogRef = useDialogA11y(!workspace, onClose);
+  const previewDialogRef = useDialogA11y(Boolean(previewAttachment), () => setPreviewAttachment(null));
 
   const selectedSessionId = sessions.length === 1 ? sessions[0].id : draft.sessionId;
   const selectedSession = sessions.find((session) => session.id === selectedSessionId);
@@ -161,7 +163,9 @@ export function SubjectModal({
           const signedResults = await Promise.all(rows.map((item) => supabase!.storage.from(ATTACHMENT_BUCKET).createSignedUrl(item.storage_path, 3600)));
           const grouped: Record<string, NoteAttachment[]> = {};
           rows.forEach((item, index) => {
-            (grouped[item.note_id] ??= []).push({ id: item.id, name: item.name, mime_type: item.mime_type, size: item.size, path: item.storage_path, url: signedResults[index]?.data?.signedUrl ?? "", created_at: item.created_at });
+            const signed = signedResults[index];
+            if (signed?.error) console.warn("[horarium] createSignedUrl failed", item.storage_path, signed.error);
+            (grouped[item.note_id] ??= []).push({ id: item.id, name: item.name, mime_type: item.mime_type, size: item.size, path: item.storage_path, url: signed?.data?.signedUrl ?? "", created_at: item.created_at });
           });
           setAttachments(grouped);
         } else setMessage((current) => current || "Los adjuntos requieren ejecutar la migración de Stage 2.");
@@ -296,7 +300,7 @@ export function SubjectModal({
     for (const file of files) {
       if (!isAllowedAttachment(file, REMOTE_ATTACHMENT_LIMIT)) { setMessage("Adjunto rechazado: usá imágenes, PDF u Office de hasta 10 MB."); continue; }
       const path = `${userId}/${noteId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const upload = await supabase!.storage.from(ATTACHMENT_BUCKET).upload(path, file, { upsert: false });
+      const upload = await supabase!.storage.from(ATTACHMENT_BUCKET).upload(path, file, { upsert: false, contentType: file.type || "application/octet-stream" });
       if (upload.error) { setMessage("No se pudo subir el adjunto. Revisá el bucket de Supabase."); continue; }
       const inserted = await supabase!.from("note_attachments").insert({ note_id: noteId, name: file.name, mime_type: file.type || "application/octet-stream", size: file.size, storage_path: path });
       if (inserted.error) { await supabase!.storage.from(ATTACHMENT_BUCKET).remove([path]); setMessage("No se pudo guardar la información del adjunto."); }
@@ -336,6 +340,42 @@ export function SubjectModal({
     await supabase.storage.from(ATTACHMENT_BUCKET).remove([attachment.path]);
     const { error } = await supabase.from("note_attachments").delete().eq("id", attachment.id);
     if (error) setMessage("No se pudo eliminar el adjunto."); else await loadNotes();
+  }
+
+  function isPdfAttachment(attachment: NoteAttachment): boolean {
+    return attachment.mime_type === "application/pdf" || attachment.name.toLowerCase().endsWith(".pdf");
+  }
+
+  function isImageAttachment(attachment: NoteAttachment): boolean {
+    return attachment.mime_type.startsWith("image/");
+  }
+
+  async function handleDownload(attachment: NoteAttachment) {
+    if (!attachment.url && !attachment.path) return;
+    // Local mode: url is dataURL — trigger direct download
+    if (!supabase || !attachment.path) {
+      const anchor = document.createElement("a");
+      anchor.href = attachment.url;
+      anchor.download = attachment.name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      return;
+    }
+    // Remote: create a short-lived signed URL with proper filename so cross-origin download preserves name
+    const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrl(attachment.path, 60, { download: attachment.name });
+    const href = data?.signedUrl ?? attachment.url;
+    if (error || !href) {
+      setMessage("No se pudo generar el enlace de descarga.");
+      return;
+    }
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = attachment.name;
+    // Must be in DOM for Firefox
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
   const NOTE_PREVIEW_LIMIT = 280;
@@ -751,11 +791,26 @@ export function SubjectModal({
                     ) : null}
                     {(attachments[note.id] ?? note.attachments).length > 0 ? <div className="mt-3 space-y-2 border-t border-[var(--line)] pt-3">
                       <p className="text-xs font-semibold text-[var(--muted)]">Adjuntos</p>
-                      {(attachments[note.id] ?? note.attachments).map((attachment) => <div key={attachment.id} className="flex items-center gap-2 text-xs">
-                        {attachment.mime_type.startsWith("image/") && attachment.url ? <img src={attachment.url} alt={attachment.name} className="h-10 w-10 rounded object-cover" /> : <a href={attachment.url} download={attachment.name} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[var(--accent)]">{attachment.name}</a>}
-                        {attachment.mime_type.startsWith("image/") ? <a href={attachment.url} download={attachment.name} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[var(--accent)]">{attachment.name}</a> : null}
-                         {canMutateNote(note) ? <button type="button" onClick={() => void deleteAttachment(note.id, attachment)} className="shrink-0 text-rose-500">Eliminar</button> : null}
-                      </div>)}
+                      {(attachments[note.id] ?? note.attachments).map((attachment) => {
+                        const isImage = isImageAttachment(attachment);
+                        const isPdf = isPdfAttachment(attachment);
+                        return (
+                          <div key={attachment.id} className="flex items-center gap-2 text-xs">
+                            {isImage && attachment.url ? <img src={attachment.url} alt={attachment.name} className="h-10 w-10 shrink-0 rounded object-cover" /> : null}
+                            {isPdf && !isImage ? <span className="shrink-0 rounded bg-[var(--soft)] px-1.5 py-1 text-[10px] font-bold text-[var(--accent)]">PDF</span> : null}
+                            <span className="min-w-0 flex-1 truncate text-[var(--ink)]" title={attachment.name}>{attachment.name}</span>
+                            {attachment.url ? (
+                              isPdf || isImage ? (
+                                <button type="button" onClick={() => setPreviewAttachment(attachment)} className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Ver</button>
+                              ) : (
+                                <a href={attachment.url} target="_blank" rel="noreferrer" className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Ver</a>
+                              )
+                            ) : null}
+                            <button type="button" onClick={() => void handleDownload(attachment)} className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Descargar</button>
+                            {canMutateNote(note) ? <button type="button" onClick={() => void deleteAttachment(note.id, attachment)} className="shrink-0 font-semibold text-rose-500">Eliminar</button> : null}
+                          </div>
+                        );
+                      })}
                     </div> : null}
                     <div className="mt-3 flex items-center justify-between">
                       <time className="text-[10px] font-medium text-[var(--muted)]">
@@ -924,11 +979,26 @@ export function SubjectModal({
                     ) : null}
                     {(attachments[note.id] ?? note.attachments).length > 0 ? <div className="mt-3 space-y-2 border-t border-[var(--line)] pt-3">
                       <p className="text-xs font-semibold text-[var(--muted)]">Adjuntos</p>
-                      {(attachments[note.id] ?? note.attachments).map((attachment) => <div key={attachment.id} className="flex items-center gap-2 text-xs">
-                        {attachment.mime_type.startsWith("image/") && attachment.url ? <img src={attachment.url} alt={attachment.name} className="h-10 w-10 rounded object-cover" /> : <a href={attachment.url} download={attachment.name} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[var(--accent)]">{attachment.name}</a>}
-                        {attachment.mime_type.startsWith("image/") ? <a href={attachment.url} download={attachment.name} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[var(--accent)]">{attachment.name}</a> : null}
-                         {canMutateNote(note) ? <button type="button" onClick={() => void deleteAttachment(note.id, attachment)} className="shrink-0 text-rose-500">Eliminar</button> : null}
-                      </div>)}
+                      {(attachments[note.id] ?? note.attachments).map((attachment) => {
+                        const isImage = isImageAttachment(attachment);
+                        const isPdf = isPdfAttachment(attachment);
+                        return (
+                          <div key={attachment.id} className="flex items-center gap-2 text-xs">
+                            {isImage && attachment.url ? <img src={attachment.url} alt={attachment.name} className="h-10 w-10 shrink-0 rounded object-cover" /> : null}
+                            {isPdf && !isImage ? <span className="shrink-0 rounded bg-[var(--soft)] px-1.5 py-1 text-[10px] font-bold text-[var(--accent)]">PDF</span> : null}
+                            <span className="min-w-0 flex-1 truncate text-[var(--ink)]" title={attachment.name}>{attachment.name}</span>
+                            {attachment.url ? (
+                              isPdf || isImage ? (
+                                <button type="button" onClick={() => setPreviewAttachment(attachment)} className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Ver</button>
+                              ) : (
+                                <a href={attachment.url} target="_blank" rel="noreferrer" className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Ver</a>
+                              )
+                            ) : null}
+                            <button type="button" onClick={() => void handleDownload(attachment)} className="shrink-0 font-semibold text-[var(--accent)] hover:underline">Descargar</button>
+                            {canMutateNote(note) ? <button type="button" onClick={() => void deleteAttachment(note.id, attachment)} className="shrink-0 font-semibold text-rose-500">Eliminar</button> : null}
+                          </div>
+                        );
+                      })}
                     </div> : null}
                     <div className="mt-3 flex items-center justify-between">
                       <time className="text-[10px] font-medium text-[var(--muted)]">
@@ -963,6 +1033,37 @@ export function SubjectModal({
           </>
         )}
       </aside>
+      {previewAttachment ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreviewAttachment(null)}>
+          <div ref={previewDialogRef as unknown as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="true" aria-label={`Vista previa de ${previewAttachment.name}`} className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-[var(--surface)] shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+              <p className="truncate text-sm font-semibold text-[var(--ink)]" title={previewAttachment.name}>{previewAttachment.name}</p>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => void handleDownload(previewAttachment)} className="text-xs font-semibold text-[var(--accent)] hover:underline">Descargar</button>
+                <button type="button" onClick={() => setPreviewAttachment(null)} aria-label="Cerrar vista previa" className="rounded-full p-1 text-[var(--muted)] hover:bg-[var(--soft)] hover:text-[var(--ink)]">✕</button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-[var(--soft)]">
+              {isImageAttachment(previewAttachment) ? (
+                <img src={previewAttachment.url} alt={previewAttachment.name} className="mx-auto max-h-[80vh] w-auto object-contain" />
+              ) : isPdfAttachment(previewAttachment) ? (
+                <div className="flex h-[80vh] flex-col">
+                  <iframe src={previewAttachment.url} title={previewAttachment.name} className="flex-1 w-full border-0 bg-white" />
+                  <div className="border-t border-[var(--line)] bg-[var(--surface)] px-4 py-2 text-center">
+                    <a href={previewAttachment.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--accent)] hover:underline">Si no ves el PDF, abrir en nueva pestaña</a>
+                    <span className="mx-2 text-[var(--muted)]">·</span>
+                    <button type="button" onClick={() => void handleDownload(previewAttachment)} className="text-xs font-semibold text-[var(--accent)] hover:underline">Descargar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-sm text-[var(--muted)]">
+                  Vista previa no disponible para este tipo de archivo. Usá Descargar.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

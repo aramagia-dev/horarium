@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { dayLabel, type CatalogProfessor, type CatalogRoom, type ScheduleEntry, type Subject } from "@/lib/schedule-data";
-import { pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { catalogCardHover, hoverTransition, pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 
 type CatalogKind = "subjects" | "professors" | "rooms";
 
@@ -29,9 +29,9 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
             <motion.article
               key={group.key}
               variants={withReducedMotion(staggerItem, reduced)}
-              whileHover={reduced ? undefined : { y: -2, scale: 1.01 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
+              whileHover={reduced ? undefined : catalogCardHover}
+              transition={hoverTransition}
+              className="catalog-card rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
             >
               <p className="text-xs font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{group.label}</p>
               {kind === "subjects" && group.items[0] ? (

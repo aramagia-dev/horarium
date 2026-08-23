@@ -6,7 +6,7 @@ import { BookOpenCheck, CalendarDays, ClipboardCheck, Presentation, RotateCcw } 
 import { addLocalDays, dayForDate, formatDateInput, formatDay, formatWeekHeading, formatWeekRange, getInitialDay, getWeekStart, isSameLocalDay, parseDateInput, startOfLocalDay } from "@/lib/calendar-utils";
 import type { AcademicEvent, AcademicEventType } from "@/lib/academic-events";
 import { days, minutesFromStart, timeSlots, timelineDisplayEnd, type Day, type ScheduleEntry } from "@/lib/schedule-data";
-import { pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { hoverTransition, pageVariants, scheduleCardHover, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 
 const timelineHeight = 720;
 const timelineInset = 20;
@@ -197,9 +197,9 @@ function ScheduleCard({ entry, date, events, subjectSessions, onSelect, onSelect
       tabIndex={0}
       onClick={() => onSelect(entry, date)}
       onKeyDown={(event) => cardKeyDown(event, () => onSelect(entry, date))}
-      whileHover={reduced ? undefined : { y: -2, scale: 1.01 }}
+      whileHover={reduced ? undefined : scheduleCardHover}
       whileTap={reduced ? undefined : { scale: 0.99 }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
+      transition={hoverTransition}
       className={`schedule-card accent-${entry.accent} absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-[10px] border px-3 py-2.5 text-left sm:left-2 sm:right-2`}
       style={{ top, height, minHeight: 108 }}
     >
@@ -220,9 +220,9 @@ function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], on
       tabIndex={0}
       onClick={() => onSelect(entry, date)}
       onKeyDown={(event) => cardKeyDown(event, () => onSelect(entry, date))}
-      whileHover={reduced ? undefined : { y: -2, scale: 1.01 }}
+      whileHover={reduced ? undefined : scheduleCardHover}
       whileTap={reduced ? undefined : { scale: 0.99 }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
+      transition={hoverTransition}
       className={`schedule-card accent-${entry.accent} relative flex min-h-[132px] w-full items-start gap-4 rounded-[20px] border px-4 py-5 text-left shadow-[0_8px_24px_rgba(30,27,75,0.04)]`}
     >
       <div className="w-[54px] shrink-0 border-r border-[var(--line)] pr-3 font-mono text-sm font-bold leading-6">

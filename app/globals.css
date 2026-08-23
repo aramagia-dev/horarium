@@ -82,6 +82,50 @@ body { background: var(--background); color: var(--foreground); font-family: var
 .admin-primary:hover { filter: brightness(0.95); }
 .admin-primary:disabled { cursor: not-allowed; opacity: 0.6; }
 
+/* ── Card hover elevation: motion handles y/scale/shadow, CSS handles filter + border ── */
+.schedule-card {
+  transition: filter 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.schedule-card:hover {
+  filter: brightness(1.07) saturate(1.18);
+  border-color: var(--accent-card);
+}
+.dark .schedule-card:hover {
+  filter: brightness(1.12) saturate(1.18);
+}
+
+/* Secondary cards — same language, proportional intensity */
+.notes-subject-card,
+.catalog-card,
+.event-card,
+.admin-metric-card,
+.admin-session-row,
+.note-article {
+  transition: filter 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.notes-subject-card:hover {
+  border-color: var(--accent);
+  filter: brightness(1.06) saturate(1.12);
+}
+.dark .notes-subject-card:hover {
+  filter: brightness(1.10) saturate(1.12);
+}
+.catalog-card:hover {
+  border-color: var(--accent);
+  filter: brightness(1.05) saturate(1.10);
+}
+.event-card:hover {
+  border-color: var(--accent);
+  filter: brightness(1.04) saturate(1.10);
+}
+.note-article:hover {
+  border-color: var(--accent);
+}
+.admin-metric-card:hover,
+.admin-session-row:hover {
+  border-color: var(--accent);
+}
+
 /* Ensure every clickable element shows pointer — user requested explicit cursor feedback */
 button:not(:disabled), a[href], select:not(:disabled), [role="button"] { cursor: pointer; }
 button:disabled, a[aria-disabled="true"], select:disabled { cursor: not-allowed; }

@@ -8,7 +8,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { days, scheduleSessions as localScheduleSessions, subjects as localSubjects, type Accent, type Day } from "@/lib/schedule-data";
-import { pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { hoverTransition, pageVariants, staggerContainer, staggerItem, subtleCardHover, useReducedMotion, withReducedMotion } from "@/lib/motion";
 
 type Subject = { id: string; code: string; name: string; accent: Accent };
 type Professor = { id: string; display_name: string; normalized_name: string };
@@ -203,10 +203,10 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
         ) : null}
       </AnimatePresence>
       <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <motion.div variants={withReducedMotion(staggerItem, reduced)}><Metric label="Materias" value={subjects.length} /></motion.div>
-        <motion.div variants={withReducedMotion(staggerItem, reduced)}><Metric label="Sesiones" value={sessions.length} accent /></motion.div>
-        <motion.div variants={withReducedMotion(staggerItem, reduced)}><Metric label="Profesores" value={professors.length} /></motion.div>
-        <motion.div variants={withReducedMotion(staggerItem, reduced)}><Metric label="Aulas" value={rooms.length} /></motion.div>
+        <motion.div variants={withReducedMotion(staggerItem, reduced)} whileHover={reduced ? undefined : subtleCardHover} transition={hoverTransition}><Metric label="Materias" value={subjects.length} /></motion.div>
+        <motion.div variants={withReducedMotion(staggerItem, reduced)} whileHover={reduced ? undefined : subtleCardHover} transition={hoverTransition}><Metric label="Sesiones" value={sessions.length} accent /></motion.div>
+        <motion.div variants={withReducedMotion(staggerItem, reduced)} whileHover={reduced ? undefined : subtleCardHover} transition={hoverTransition}><Metric label="Profesores" value={professors.length} /></motion.div>
+        <motion.div variants={withReducedMotion(staggerItem, reduced)} whileHover={reduced ? undefined : subtleCardHover} transition={hoverTransition}><Metric label="Aulas" value={rooms.length} /></motion.div>
       </motion.div>
       <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_12px_30px_rgb(15_23_42/0.04)] sm:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--accent)]">Tarea principal</p><h2 className="mt-1 text-xl font-semibold text-[var(--ink)]">Sesiones del horario</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">Creá sesiones y editá la asignación de profesor o aula por materia.</p></div><span className="rounded-full bg-[var(--background)] px-3 py-1 text-xs font-semibold text-[var(--muted)]">{sessions.length} registradas</span></div>
@@ -220,9 +220,9 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
                 {subjectSessions.map((item) => (
                   <motion.div
                     key={item.id}
-                    whileHover={reduced ? undefined : { y: -1, scale: 1.005 }}
-                    transition={{ duration: 0.16, ease: "easeOut" }}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-3"
+                    whileHover={reduced ? undefined : subtleCardHover}
+                    transition={hoverTransition}
+                    className="admin-session-row flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-3"
                   >
                     <div className="min-w-0 text-xs leading-5 text-[var(--ink)]"><p className="font-semibold">{dayLabel(item.day)} · {item.start_time.slice(0, 5)}–{item.end_time.slice(0, 5)} · Sección {item.section}</p><p className="text-[var(--muted)]">Profesor: {relationValue(item.professors)?.display_name ?? "Sin asignar"} · Aula: {relationValue(item.rooms)?.name ?? "Sin asignar"}</p></div>
                     <div className="flex shrink-0 items-center gap-3"><button type="button" onClick={() => editSchedule(item)} className="text-xs font-semibold text-[var(--accent)] hover:underline">Editar asignación</button><button type="button" onClick={() => void remove("schedules", item.id, "la sesión")} className="text-xs font-semibold text-rose-500 hover:underline">Eliminar</button></div>
@@ -263,7 +263,7 @@ function serverError(message: string, code?: string) {
   return `No se pudo completar la operación. ${message}`;
 }
 function AccessState({ title, text }: { title: string; text: string }) { return <section aria-label="Administración" className="mx-auto max-w-3xl rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] px-6 py-14 text-center"><h1 className="text-xl font-semibold text-[var(--ink)]">{title}</h1><p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[var(--muted)]">{text}</p></section>; }
-function Metric({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) { return <div className={`rounded-xl border p-4 ${accent ? "border-[var(--accent)]/40 bg-[var(--accent)]/10" : "border-[var(--line)] bg-[var(--surface)]"}`}><p className="text-xs font-semibold text-[var(--muted)]">{label}</p><p className="mt-1 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">{value}</p></div>; }
+function Metric({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) { return <div className={`admin-metric-card rounded-xl border p-4 ${accent ? "border-[var(--accent)]/40 bg-[var(--accent)]/10" : "border-[var(--line)] bg-[var(--surface)]"}`}><p className="text-xs font-semibold text-[var(--muted)]">{label}</p><p className="mt-1 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">{value}</p></div>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-xs font-semibold text-[var(--muted)]">{label}<span className="mt-1 block">{children}</span></label>; }
 function List({ children }: { children: React.ReactNode }) { return <div className="mt-5 space-y-2 border-t border-[var(--line)] pt-4">{children}</div>; }
 function ListItem({ text, onEdit, onDelete }: { text: string; onEdit: () => void; onDelete: () => void }) { return <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--background)] px-3 py-2"><span className="min-w-0 truncate text-xs text-[var(--ink)]">{text}</span><span className="flex shrink-0 gap-2"><button type="button" onClick={onEdit} className="flex items-center gap-1 text-xs font-semibold text-[var(--accent)]"><Pencil size={13} aria-hidden="true" />Editar</button><button type="button" onClick={onDelete} className="flex items-center gap-1 text-xs font-semibold text-rose-500"><Trash2 size={13} aria-hidden="true" />Eliminar</button></span></div>; }

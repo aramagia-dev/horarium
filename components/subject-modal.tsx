@@ -37,7 +37,7 @@ import {
 } from "@/lib/schedule-data";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { motion } from "framer-motion";
-import { staggerContainer, staggerItem, useReducedMotion } from "@/lib/motion";
+import { hoverTransition, staggerContainer, staggerItem, subtleCardHover, useReducedMotion } from "@/lib/motion";
 
 type NoteComment = { id: string; note_id: string; author_id: string | null; content: string; created_at: string; updated_at: string };
 
@@ -952,7 +952,9 @@ export function SubjectModal({
                     key={note.id}
                     data-note-id={note.id}
                     variants={reduced ? undefined : staggerItem}
-                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
+                    whileHover={reduced ? undefined : subtleCardHover}
+                    transition={hoverTransition}
+                    className={`note-article rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold text-[var(--ink)]">
@@ -1181,7 +1183,9 @@ export function SubjectModal({
                   <motion.article
                     key={note.id}
                     data-note-id={note.id}
-                    className={`rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
+                    whileHover={reduced ? undefined : subtleCardHover}
+                    transition={hoverTransition}
+                    className={`note-article rounded-xl border border-[var(--line)] border-l-2 border-l-[var(--accent)] bg-[var(--soft)]/20 p-4 ${note.status === "archived" ? "opacity-70" : ""}${isHighlighted ? " ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] shadow-lg" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold text-[var(--ink)]">

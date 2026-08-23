@@ -6,7 +6,7 @@ import { CalendarPlus } from "lucide-react";
 import { eventStatuses, eventTypes, formatEventDate, formatEventMonthShort, isEventOverdue, loadAcademicEvents, saveAcademicEvent, deleteAcademicEvent, type AcademicEvent, type AcademicEventInput, type AcademicEventStatus, type AcademicEventType } from "@/lib/academic-events";
 import type { Subject } from "@/lib/schedule-data";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
-import { pageVariants, staggerContainer, staggerItem, springTransition, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { hoverTransition, pageVariants, springTransition, staggerContainer, staggerItem, subtleCardHover, useReducedMotion, withReducedMotion } from "@/lib/motion";
 
 const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", recuperatorio: "Recuperatorio", exposición: "Exposición", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
 const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, description: "", status: "pending" };
@@ -169,9 +169,9 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                 ref={event.id === selectedEventId ? (selectedEventRef as unknown as React.Ref<HTMLDivElement>) : undefined}
                 data-selected={event.id === selectedEventId ? "true" : undefined}
                 variants={withReducedMotion(staggerItem, reduced)}
-                whileHover={reduced ? undefined : { y: -2, scale: 1.005 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className={`rounded-2xl border bg-[var(--surface)] p-4 sm:p-5 ${event.id === selectedEventId ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30" : isEventOverdue(event) ? "border-rose-400/60" : "border-[var(--line)]"}`}
+                whileHover={reduced ? undefined : subtleCardHover}
+                transition={hoverTransition}
+                className={`event-card rounded-2xl border bg-[var(--surface)] p-4 sm:p-5 ${event.id === selectedEventId ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30" : isEventOverdue(event) ? "border-rose-400/60" : "border-[var(--line)]"}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex min-w-0 gap-3">

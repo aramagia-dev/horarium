@@ -9,7 +9,7 @@ import { notesChangedEvent, readLocalNotes } from "@/lib/notes-storage";
 import type { ScheduleEntry } from "@/lib/schedule-data";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { staggerContainer, staggerItem, useReducedMotion } from "@/lib/motion";
+import { cardHover, hoverTransition, staggerContainer, staggerItem, useReducedMotion } from "@/lib/motion";
 
 type NotesFocus = { subjectId: string | null; noteId: string | null; commentId: string | null } | null;
 
@@ -94,9 +94,10 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
             type="button"
             onClick={() => setSelectedCode(subject.code)}
             variants={reduced ? undefined : staggerItem}
-            whileHover={reduced ? undefined : { scale: 1.01 }}
+            whileHover={reduced ? undefined : cardHover}
             whileTap={reduced ? undefined : { scale: 0.99 }}
-            className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition ${selectedCode === subject.code ? "border-[var(--accent)] bg-[var(--sidebar-accent)]" : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--accent)]"}`}
+            transition={hoverTransition}
+            className={`notes-subject-card flex w-full items-center justify-between rounded-xl border p-4 text-left ${selectedCode === subject.code ? "border-[var(--accent)] bg-[var(--sidebar-accent)]" : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--accent)]"}`}
           >
             <span className="min-w-0"><span className="block text-[10px] font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{subject.code}</span><strong className="mt-1 block truncate text-sm font-bold text-[var(--ink)]">{subject.subject}</strong><span className="mt-1 block truncate text-xs text-[var(--muted)]">{sections.join(" · ")}</span></span><span className="ml-3 shrink-0 text-xs font-semibold text-[var(--accent)]">{count}</span>
           </motion.button>

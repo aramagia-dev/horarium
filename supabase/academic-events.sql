@@ -45,5 +45,6 @@ create policy "Authenticated update academic events" on public.academic_events f
   using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') or created_by = auth.uid())
   with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') or created_by = auth.uid());
 drop policy if exists "Admins delete academic events" on public.academic_events;
-create policy "Admins delete academic events" on public.academic_events for delete to authenticated
-  using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+drop policy if exists "Owners delete academic events" on public.academic_events;
+create policy "Owners delete academic events" on public.academic_events for delete to authenticated
+  using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') or created_by = auth.uid());

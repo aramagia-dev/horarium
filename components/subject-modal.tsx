@@ -184,11 +184,12 @@ export function SubjectModal({
       if (noteIds.length > 0) {
         const attachmentResult = await supabase!.from("note_attachments").select("id, note_id, name, mime_type, size, storage_path, created_at").in("note_id", noteIds);
         if (!attachmentResult.error) {
+          const rows = attachmentResult.data ?? [];
+          const signedResults = await Promise.all(rows.map((item) => supabase!.storage.from(ATTACHMENT_BUCKET).createSignedUrl(item.storage_path, 3600)));
           const grouped: Record<string, NoteAttachment[]> = {};
-          for (const item of attachmentResult.data ?? []) {
-            const signed = await supabase!.storage.from(ATTACHMENT_BUCKET).createSignedUrl(item.storage_path, 3600);
-            (grouped[item.note_id] ??= []).push({ id: item.id, name: item.name, mime_type: item.mime_type, size: item.size, path: item.storage_path, url: signed.data?.signedUrl ?? "", created_at: item.created_at });
-          }
+          rows.forEach((item, index) => {
+            (grouped[item.note_id] ??= []).push({ id: item.id, name: item.name, mime_type: item.mime_type, size: item.size, path: item.storage_path, url: signedResults[index]?.data?.signedUrl ?? "", created_at: item.created_at });
+          });
           setAttachments(grouped);
         } else setMessage((current) => current || "Los adjuntos requieren ejecutar la migración de Stage 2.");
       }

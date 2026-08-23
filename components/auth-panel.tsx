@@ -121,7 +121,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     }
   }, [open, user, profileAlias]);
 
-  // Cleanup preview url
+  // Cleanup preview url — revoca el blob anterior al reemplazar o al desmontar
   useEffect(() => {
     return () => {
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
@@ -132,17 +132,19 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     event.preventDefault();
     if (!supabase) return;
     const normalizedEmail = email.trim().toLowerCase();
-    const normalizedPassword = password.trim();
     if (normalizedEmail !== email) setEmail(normalizedEmail);
-    if (normalizedPassword !== password) setPassword(normalizedPassword);
-    if (!normalizedEmail || !normalizedPassword) {
-      setError("Completá email y contraseña sin espacios al inicio o final.");
+    if (!normalizedEmail || !password) {
+      setError("Completá email y contraseña.");
+      return;
+    }
+    if (/\s/.test(password)) {
+      setError("La contraseña no puede contener espacios.");
       return;
     }
     setLoading(true);
     setError("");
     setSuccess("");
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password: normalizedPassword });
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
     if (signInError) setError("No se pudo iniciar sesión. Verificá tu email y contraseña.");
     else { setOpen(false); setPassword(""); }
     setLoading(false);
@@ -154,22 +156,22 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     setError("");
     setSuccess("");
     const normalizedEmail = email.trim().toLowerCase();
-    const normalizedPassword = password.trim();
-    const normalizedConfirmPassword = confirmPassword.trim();
     const normalizedDisplayName = displayName.trim();
     if (normalizedEmail !== email) setEmail(normalizedEmail);
-    if (normalizedPassword !== password) setPassword(normalizedPassword);
-    if (normalizedConfirmPassword !== confirmPassword) setConfirmPassword(normalizedConfirmPassword);
     if (normalizedDisplayName !== displayName) setDisplayName(normalizedDisplayName);
     if (!normalizedEmail) {
-      setError("Ingresá un email válido sin espacios al inicio o final.");
+      setError("Ingresá un email válido.");
       return;
     }
-    if (normalizedPassword.length < 8) {
-      setError("La contraseña debe tener al menos 8 caracteres sin contar espacios al inicio o final.");
+    if (/\s/.test(password)) {
+      setError("La contraseña no puede contener espacios.");
       return;
     }
-    if (normalizedPassword !== normalizedConfirmPassword) {
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres y no puede contener espacios.");
+      return;
+    }
+    if (password !== confirmPassword) {
       setError("Las contraseñas no coinciden.");
       return;
     }
@@ -181,7 +183,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
     setLoading(true);
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: normalizedEmail,
-      password: normalizedPassword,
+      password,
       options: { emailRedirectTo: `${window.location.origin}/`, data: { display_name: normalizedDisplayName || undefined } },
     });
     if (signUpError) {
@@ -247,8 +249,7 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       setAliasError("La foto debe pesar menos de 2MB.");
       return;
     }
-    // preview local
-    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    // preview local — el useEffect revoca el blob anterior al cambiar
     const previewUrl = URL.createObjectURL(file);
     setAvatarPreview(previewUrl);
     setAvatarUploading(true);
@@ -268,7 +269,6 @@ export function AuthPanel({ onAuthChange }: { onAuthChange?: (state: AuthState) 
       await updateUser({ ...user, user_metadata: { ...(user.user_metadata ?? {}), avatar_url: publicUrl } });
     } catch (e) {
       setAliasError(e instanceof Error ? e.message : "No se pudo subir la foto.");
-      if (avatarPreview) URL.revokeObjectURL(previewUrl);
       setAvatarPreview(null);
     } finally {
       setAvatarUploading(false);

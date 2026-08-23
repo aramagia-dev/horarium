@@ -69,22 +69,21 @@ export default function AppShell() {
   // allow NotificationsBell to navigate via custom event
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { view?: string; eventId?: string; noteId?: string; subjectId?: string | null } | undefined;
+      const detail = (e as CustomEvent).detail as { view?: string; eventId?: string; noteId?: string } | undefined;
       if (!detail?.view) return;
       if (detail.view === "events" && detail.eventId) selectEventById(detail.eventId);
       else if (detail.view === "events") navigate("events");
       else if (detail.view === "notes") {
-        if (detail.subjectId && detail.noteId) {
-          const entry = schedule.find((s) => s.subjectId === detail.subjectId) ?? schedule.find((s) => s.code === detail.subjectId) ?? null;
-          if (entry) setSelectedSubject(entry);
-        }
+        // Solo navegar a Notas — no abrir el SubjectModal global (barra derecha)
+        // La vista Notas ya renderiza su propio workspace; el noteId se puede usar
+        // para resaltar/expandir la nota específica dentro del workspace si aplica.
         navigate("notes");
       }
     };
     window.addEventListener("horarium:navigate", handler as EventListener);
     return () => window.removeEventListener("horarium:navigate", handler as EventListener);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedule]);
+  }, []);
 
   return <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
     <header className="flex h-[72px] items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-4 sm:px-8">

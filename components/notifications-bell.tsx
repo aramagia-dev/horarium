@@ -21,7 +21,7 @@ type Props = {
   onNavigateView?: (view: "events" | "notes") => void;
 };
 
-export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView }: Props) {
+export function NotificationsBell({ onSelectEvent, onNavigateView }: Props) {
   const { userId } = useAuth();
   const { publicData } = useSchedule();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -135,19 +135,11 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
       else if (onNavigateView) onNavigateView("events");
       else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events", eventId: n.event_id } }));
     } else if (n.note_id) {
-      // need subject_id for note navigation: fetch note's subject if available via supabase, else just go to notes view
-      let subjectId: string | null = null;
-      if (supabase) {
-        try {
-          const { data } = await supabase.from("notes").select("subject_id").eq("id", n.note_id).maybeSingle();
-          subjectId = (data as { subject_id?: string } | null)?.subject_id ?? null;
-        } catch {
-          // ignore
-        }
-      }
-      if (onSelectNote) onSelectNote(subjectId, n.note_id);
-      else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "notes", noteId: n.note_id, subjectId } }));
+      // Solo abrir Notas — no disparar SubjectModal global (barra derecha)
       if (onNavigateView) onNavigateView("notes");
+      else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "notes", noteId: n.note_id } }));
+      // Si en el futuro se quiere resaltar la nota específica, NotasBoard puede
+      // escuchar horarium:navigate y expandir esa nota por noteId sin abrir modal.
     }
   };
 

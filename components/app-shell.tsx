@@ -14,6 +14,7 @@ import { ScheduleBoard } from "@/components/schedule-board";
 import { EventsBoard } from "@/components/events-board";
 import { SettingsBoard } from "@/components/settings-board";
 import { SubjectModal } from "@/components/subject-modal";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { scheduleSessions, type ScheduleEntry } from "@/lib/schedule-data";
 import type { AcademicEvent } from "@/lib/academic-events";
 import { useAuth } from "@/lib/auth-context";
@@ -57,16 +58,38 @@ export default function AppShell() {
     window.localStorage.setItem(themeKey, next ? "dark" : "light");
   }
 
+  const schedule = publicData?.schedule ?? [];
+  const navItems = isAdmin ? [...baseNavItems, { view: "admin" as const, icon: Wrench, label: "Administración" }] : baseNavItems;
+
   function navigate(nextView: View) { setView(nextView); setDrawerOpen(false); }
   function selectEvent(event: AcademicEvent) { setSelectedEventId(event.id); navigate("events"); }
+  function selectEventById(eventId: string) { setSelectedEventId(eventId); navigate("events"); }
   function selectSubject(subject: ScheduleEntry, date?: Date) { setSelectedSubject(subject); setSelectedDate(date ?? null); }
-  const navItems = isAdmin ? [...baseNavItems, { view: "admin" as const, icon: Wrench, label: "Administración" }] : baseNavItems;
-  const schedule = publicData?.schedule ?? [];
+
+  // allow NotificationsBell to navigate via custom event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { view?: string; eventId?: string; noteId?: string; subjectId?: string | null } | undefined;
+      if (!detail?.view) return;
+      if (detail.view === "events" && detail.eventId) selectEventById(detail.eventId);
+      else if (detail.view === "events") navigate("events");
+      else if (detail.view === "notes") {
+        if (detail.subjectId && detail.noteId) {
+          const entry = schedule.find((s) => s.subjectId === detail.subjectId) ?? schedule.find((s) => s.code === detail.subjectId) ?? null;
+          if (entry) setSelectedSubject(entry);
+        }
+        navigate("notes");
+      }
+    };
+    window.addEventListener("horarium:navigate", handler as EventListener);
+    return () => window.removeEventListener("horarium:navigate", handler as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedule]);
 
   return <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
     <header className="flex h-[72px] items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-4 sm:px-8">
       <div className="flex items-center gap-3"><button type="button" onClick={() => setDrawerOpen(true)} aria-label="Abrir navegación" aria-expanded={drawerOpen} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink)] transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] lg:hidden"><Menu size={18} aria-hidden="true" /></button><button type="button" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Mostrar navegación" : "Ocultar navegación"} aria-expanded={!sidebarCollapsed} className="hidden h-9 w-9 items-center justify-center rounded-lg text-[var(--ink)] transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] lg:flex">{sidebarCollapsed ? <PanelLeft size={18} aria-hidden="true" /> : <PanelLeftClose size={18} aria-hidden="true" />}</button><div className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] bg-[var(--accent)] text-white"><Clock3 size={18} aria-hidden="true" /></div><div><p className="text-[18px] font-bold tracking-tight text-[var(--ink)]">Horarium</p><p className="text-[10px] text-[var(--muted)]">Horario universitario</p></div></div>
-        <div className="flex items-center gap-3"><ThemeToggle dark={dark} onToggle={toggleTheme} /><AuthPanel /></div>
+        <div className="flex items-center gap-2"><ThemeToggle dark={dark} onToggle={toggleTheme} /><NotificationsBell onSelectEvent={selectEventById} onNavigateView={(v) => navigate(v)} /><AuthPanel /></div>
     </header>
     <div className="flex min-h-[calc(100vh-72px)]">{!sidebarCollapsed ? <Sidebar items={navItems} view={view} onNavigate={navigate} /> : null}<MobileDrawer items={navItems} open={drawerOpen} view={view} onNavigate={navigate} onClose={() => setDrawerOpen(false)} /><div className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
         {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={publicData.events} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex max-w-5xl items-center gap-2 overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{publicData.events.filter((event) => event.status !== "cancelled").slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{publicData.events.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={publicData.events} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} /> : view === "notes" ? <NotesBoard schedule={schedule} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { eventStatuses, eventTypes, formatEventDate, formatEventMonthShort, isEventOverdue, loadAcademicEvents, saveAcademicEvent, deleteAcademicEvent, type AcademicEvent, type AcademicEventInput, type AcademicEventStatus, type AcademicEventType } from "@/lib/academic-events";
 import type { Subject } from "@/lib/schedule-data";
-import { supabaseConfigured } from "@/lib/supabase";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
 
 const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", recuperatorio: "Recuperatorio", exposición: "Exposición", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
 const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, description: "", status: "pending" };
@@ -38,7 +38,50 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
 
   function beginEdit(event: AcademicEvent) { setForm({ ...event }); setEditing(true); setError(""); }
   function resetForm() { setForm(emptyForm); setEditing(false); setError(""); }
-  async function submit(event: React.FormEvent) { event.preventDefault(); const result = await saveAcademicEvent(form); if (result.error) return setError(result.error); resetForm(); const fresh = await loadAcademicEvents(); setEvents(fresh.events); onDataChanged?.(); }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const isCreating = !form.id;
+    const result = await saveAcademicEvent(form);
+    if (result.error) return setError(result.error);
+    resetForm();
+    const fresh = await loadAcademicEvents();
+    setEvents(fresh.events);
+    onDataChanged?.();
+    if (isCreating && supabase && userId) {
+      try {
+        // best-effort: notify all profiles except creator
+        const created = fresh.events.find((e) => e.title === form.title && e.date === form.date) ?? fresh.events[0];
+        const eventId = created?.id ?? null;
+        if (!eventId) return;
+        const { data: profiles } = await supabase.from("profiles").select("id");
+        const recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
+        if (recipients.length === 0) return;
+        const { createNotifications } = await import("@/lib/notifications");
+        const subjectCode = form.subject_id ? (subjects.find((s) => s.id === form.subject_id)?.code ?? "") : "";
+        const title = "Nuevo evento";
+        const body = `${form.title}${subjectCode ? ` · ${subjectCode}` : ""} · ${form.date}${form.time ? ` ${form.time.slice(0, 5)}` : ""}`;
+        const chunkSize = 50;
+        for (let i = 0; i < recipients.length; i += chunkSize) {
+          const chunk = recipients.slice(i, i + chunkSize);
+          await createNotifications(
+            chunk.map((uid: string) => ({
+              user_id: uid,
+              actor_id: userId,
+              type: "new_event" as const,
+              title,
+              body,
+              note_id: null,
+              event_id: eventId,
+              comment_id: null,
+            })),
+          );
+        }
+        window.dispatchEvent(new CustomEvent("notifications-updated"));
+      } catch (e) {
+        console.warn("[horarium] new_event notifications failed", e);
+      }
+    }
+  }
   async function remove(event: AcademicEvent) { if (!window.confirm(`¿Eliminar «${event.title}»?`)) return; const result = await deleteAcademicEvent(event.id); if (result.error) setError(result.error); else { setEvents((current) => current.filter((item) => item.id !== event.id)); onDataChanged?.(); } }
   async function markCompleted(event: AcademicEvent) { const result = await saveAcademicEvent({ ...event, status: "completed" }); if (result.error) setError(result.error); else { const fresh = await loadAcademicEvents(); setEvents(fresh.events); onDataChanged?.(); } }
 

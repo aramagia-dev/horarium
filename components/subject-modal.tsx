@@ -573,6 +573,73 @@ export function SubjectModal({
       const pr = await supabase.from("profiles").select("id, display_name, avatar_url").eq("id", inserted.author_id).maybeSingle();
       if (pr.data) setAuthorMap((prev) => ({ ...prev, [inserted.author_id!]: { display_name: (pr.data as { display_name?: string | null }).display_name ?? null, avatar_url: (pr.data as { avatar_url?: string | null }).avatar_url ?? null } }));
     }
+    // best-effort notifications: new_comment + mentions
+    try {
+      const { parseMentions, createNotifications } = await import("@/lib/notifications");
+      // fetch note author
+      let noteAuthorId: string | null = null;
+      let noteTitle: string | null = null;
+      try {
+        const { data: noteRow } = await supabase.from("notes").select("author_id, title, subject_id").eq("id", noteId).maybeSingle();
+        noteAuthorId = (noteRow as { author_id?: string | null } | null)?.author_id ?? null;
+        noteTitle = (noteRow as { title?: string | null } | null)?.title ?? null;
+      } catch {
+        // ignore
+      }
+      const items: Parameters<typeof createNotifications>[0] = [];
+      const subjectCode = subject.code;
+      if (noteAuthorId && noteAuthorId !== userId) {
+        items.push({
+          user_id: noteAuthorId,
+          actor_id: userId,
+          type: "new_comment",
+          title: `Nuevo comentario en ${subjectCode}`,
+          body: noteTitle ? `"${noteTitle}": ${trimmed.slice(0, 120)}` : trimmed.slice(0, 140),
+          note_id: noteId,
+          event_id: null,
+          comment_id: inserted.id,
+        });
+      }
+      const mentions = parseMentions(trimmed);
+      if (mentions.length > 0) {
+        const alreadyNotified = new Set<string>(items.map((i) => i.user_id));
+        alreadyNotified.add(userId);
+        // lookup profiles where display_name ilike mention
+        for (const alias of mentions) {
+          try {
+            const { data: profs } = await supabase.from("profiles").select("id, display_name").ilike("display_name", alias);
+            const matched = (profs ?? []) as Array<{ id: string; display_name: string | null }>;
+            for (const p of matched) {
+              if (!p.id || alreadyNotified.has(p.id)) continue;
+              // case-insensitive exact match after ilike broad search (ilike without % does exact but we ensure)
+              if (p.display_name?.toLowerCase() !== alias.toLowerCase()) continue;
+              alreadyNotified.add(p.id);
+              items.push({
+                user_id: p.id,
+                actor_id: userId,
+                type: "mention",
+                title: "Te mencionaron",
+                body: trimmed.slice(0, 140),
+                note_id: noteId,
+                event_id: null,
+                comment_id: inserted.id,
+              });
+            }
+          } catch {
+            // per-alias ignore
+          }
+        }
+        // fallback: if no exact matches, also try ilike with %? spec says ilike mention — keep simple exact via ilike without wildcard already did.
+        // To support partial, second attempt with % wrapping if still no mentions found for that alias
+        // (keep behavior conservative to avoid spam)
+      }
+      if (items.length > 0) {
+        await createNotifications(items);
+        window.dispatchEvent(new CustomEvent("notifications-updated"));
+      }
+    } catch (e) {
+      console.warn("[horarium] comment notifications failed", e);
+    }
   }
   async function handleUpdateComment(c: NoteComment) {
     const trimmed = editingCommentText.trim();

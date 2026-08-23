@@ -4,6 +4,10 @@ import { useEffect, useRef } from "react";
 
 export function useDialogA11y(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -11,14 +15,18 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     if (!node) return;
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    // Focus first focusable inside dialog
-    const focusable = getFocusable(node);
-    focusable[0]?.focus();
+    // Focus first input/textarea/select if available, else first focusable — avoids stealing focus to close button
+    const raf = window.requestAnimationFrame(() => {
+      const focusable = getFocusable(node);
+      if (focusable.length === 0) return;
+      const preferred = focusable.find((el) => el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
+      (preferred ?? focusable[0])?.focus();
+    });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -38,10 +46,17 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     document.addEventListener("keydown", onKeyDown);
     // prevent body scroll already handled, but ensure aria-hidden? not needed
     return () => {
+      window.cancelAnimationFrame(raf);
       document.removeEventListener("keydown", onKeyDown);
-      previouslyFocused?.focus();
+      // Only restore if focus is still inside dialog (avoid stealing focus while user types in next view)
+      const active = document.activeElement as HTMLElement | null;
+      if (active && node.contains(active)) {
+        previouslyFocused?.focus();
+      } else if (!active || active === document.body) {
+        previouslyFocused?.focus();
+      }
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return ref;
 }

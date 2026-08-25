@@ -5,7 +5,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AlignLeft, CalendarDays, ChevronDown, Heading2, List, ListChecks, Plus, UserRound, Users } from "lucide-react";
+import { AlignLeft, CalendarDays, ChevronDown, FileText, Heading2, List, ListChecks, Loader2, Plus, UserRound, Users } from "lucide-react";
 import {
   addLocalDays,
   formatClassDate,
@@ -86,6 +86,11 @@ export function SubjectModal({
       : "Las notas se guardan en este navegador. Configurá Supabase para compartirlas.",
   );
   const { userId, isAdmin } = useAuth();
+  // Live notes CTA state (MVP A — SA-owned Google Doc, max-1-live, 4h)
+  const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [liveRetryable, setLiveRetryable] = useState(false);
   const [openBlockMenuId, setOpenBlockMenuId] = useState<string | null>(null);
   const blockMenuRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -220,6 +225,81 @@ export function SubjectModal({
       if (!workspace) document.body.style.overflow = "";
     };
   }, [loadNotes, workspace]);
+
+  // ---- Live notes helpers (SA-owned Doc, max-1-live, anyone-with-link writer, external tab) ----
+  function openLiveUrl(url: string) {
+    // External link always — not iframe, persists after expiry as writer link
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    // Copy-link fallback (toast via message or liveError)
+    void navigator.clipboard.writeText(url).catch(() => {});
+    if (!opened) {
+      setMessage("Se copió el enlace. Pegalo en una pestaña nueva si no se abrió automáticamente.");
+    } else {
+      setMessage("Apuntes en vivo abiertos en Drive. El enlace también se copió.");
+    }
+    // Notify bell listeners best-effort
+    window.dispatchEvent(new CustomEvent("notifications-updated"));
+    // Trigger refresh of board pinned card
+    window.dispatchEvent(new CustomEvent("horarium:live-notes-changed", { detail: { subjectId: subject.subjectId } }));
+  }
+
+  async function handleCreateLiveNote() {
+    if (!LIVE_NOTES_ENABLED) return;
+    if (!userId) {
+      setLiveError("Iniciá sesión para crear apuntes en vivo.");
+      setLiveRetryable(false);
+      return;
+    }
+    setLiveLoading(true);
+    setLiveError("");
+    setLiveRetryable(false);
+    setMessage("");
+    try {
+      const res = await fetch("/api/drive/live-note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjectId: subject.subjectId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { id?: string; url?: string; existing?: boolean; code?: string; error?: string; retryable?: boolean; retryAfter?: number };
+      if (res.status === 201 && data.url) {
+        openLiveUrl(data.url);
+        return;
+      }
+      if (res.status === 409 && data.url) {
+        // Redirect to existing live doc (max-1 per subject)
+        openLiveUrl(data.url);
+        setLiveError("");
+        setMessage("Ya existe un apunte en vivo para esta materia. Se abrió el documento vigente.");
+        return;
+      }
+      if (res.status === 401) {
+        setLiveError("Sesión expirada. Iniciá sesión de nuevo.");
+        return;
+      }
+      if (res.status === 422 && data.code === "FOLDER_NOT_CONFIGURED") {
+        setLiveError("Carpeta no configurada para esta materia. Contactá al administrador.");
+        return;
+      }
+      if (res.status === 429 || data.retryable) {
+        const after = typeof data.retryAfter === "number" ? ` Reintentá en ${data.retryAfter}s.` : "";
+        setLiveError((data.error ?? "Límite alcanzado. Demasiadas solicitudes.") + after);
+        setLiveRetryable(true);
+        return;
+      }
+      if (res.status === 502 || data.retryable) {
+        setLiveError(data.error ?? "Drive no disponible. Reintentá en unos segundos.");
+        setLiveRetryable(true);
+        return;
+      }
+      setLiveError(data.error ?? "No se pudo crear el apunte en vivo.");
+      if (data.retryable) setLiveRetryable(true);
+    } catch {
+      setLiveError("Error de red. Reintentá.");
+      setLiveRetryable(true);
+    } finally {
+      setLiveLoading(false);
+    }
+  }
 
   function resetDraft() {
     setDraft({
@@ -800,6 +880,32 @@ export function SubjectModal({
                   <Plus size={14} aria-hidden="true" /> Nueva nota
                 </button>
               </div>
+              {LIVE_NOTES_ENABLED ? (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateLiveNote()}
+                    disabled={liveLoading || !userId}
+                    title={!userId ? "Iniciá sesión para crear apuntes en vivo" : "Crea un Google Doc colaborativo (4h, anyone-with-link writer)"}
+                    aria-label="Apuntes en vivo"
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition ${liveLoading || !userId ? "cursor-not-allowed bg-[var(--line)] text-[var(--muted)]" : "bg-amber-500 text-white hover:bg-amber-600"}`}
+                  >
+                    {liveLoading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />} Apuntes en vivo
+                  </button>
+                  {liveLoading ? <span className="text-xs text-[var(--muted)]">Creando documento…</span> : null}
+                  {!userId ? <span className="text-xs text-[var(--muted)]">Iniciá sesión para usar esta función.</span> : null}
+                </div>
+              ) : null}
+              {liveError ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                  <span className="flex-1 break-words">{liveError}</span>
+                  {liveRetryable ? (
+                    <button type="button" onClick={() => void handleCreateLiveNote()} className="shrink-0 rounded bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600">
+                      Reintentar
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               {message ? <p className="mt-4 max-w-full break-words rounded-lg bg-[var(--soft)] px-3 py-2 text-xs leading-5 text-[var(--muted)]">{message}</p> : null}
             </div>
 
@@ -1133,6 +1239,31 @@ export function SubjectModal({
               </div>
               <span className="text-xs text-[var(--muted)]">{notes.length} {notes.length === 1 ? "nota" : "notas"}</span>
             </div>
+            {LIVE_NOTES_ENABLED ? (
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleCreateLiveNote()}
+                  disabled={liveLoading || !userId}
+                  title={!userId ? "Iniciá sesión para crear apuntes en vivo" : "Crea un Google Doc colaborativo (4h, anyone-with-link writer)"}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-xs font-semibold transition ${liveLoading || !userId ? "cursor-not-allowed bg-[var(--line)] text-[var(--muted)]" : "bg-amber-500 text-white hover:bg-amber-600"}`}
+                >
+                  {liveLoading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />} Apuntes en vivo
+                </button>
+                {!userId ? <span className="text-xs text-[var(--muted)]">Iniciá sesión para usar esta función.</span> : null}
+                {liveLoading ? <span className="text-xs text-[var(--muted)]">Creando documento…</span> : null}
+                {liveError ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                    <span className="flex-1 break-words">{liveError}</span>
+                    {liveRetryable ? (
+                      <button type="button" onClick={() => void handleCreateLiveNote()} className="shrink-0 rounded bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600">
+                        Reintentar
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {message ? <p className="mt-4 rounded-lg bg-[var(--soft)] px-3 py-2 text-xs leading-5 text-[var(--muted)]">{message}</p> : null}
             <form onSubmit={saveNote} className="mt-5 space-y-2">
               <input

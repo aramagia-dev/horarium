@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AtSign, Bell, CalendarCheck2, MessageCircle } from "lucide-react";
+import { AtSign, Bell, CalendarCheck2, FileText, MessageCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { dropdownVariants, useReducedMotion } from "@/lib/motion";
 import { useAuth } from "@/lib/auth-context";
@@ -132,6 +132,29 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
       }
     }
     setOpen(false);
+    // live_note: open external Drive link in new tab (body is webViewLink), not Horarium nav
+    if (n.type === "live_note") {
+      const url = n.body?.trim();
+      if (url && /^https?:\/\//i.test(url)) {
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        if (!opened) {
+          // popup blocked — copy fallback
+          try {
+            await navigator.clipboard.writeText(url);
+          } catch {
+            // ignore
+          }
+        } else {
+          // also copy as fallback courtesy (best-effort)
+          try {
+            await navigator.clipboard.writeText(url);
+          } catch {
+            // ignore
+          }
+        }
+      }
+      return;
+    }
     if (n.event_id) {
       if (onSelectEvent) onSelectEvent(n.event_id);
       else if (onNavigateView) onNavigateView("events");
@@ -244,13 +267,13 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
               <ul className="mt-2 space-y-2">
                 {notifications.map((n) => (
                   <li key={n.id}>
-                    <button
+                      <button
                       type="button"
                       onClick={() => void handleSelect(n)}
-                      className={`flex w-full gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:bg-[var(--soft)] ${n.read ? "border-[var(--line)] bg-[var(--surface)]" : "border-[var(--accent)]/20 bg-[var(--soft)]/40"}`}
+                      className={`flex w-full gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:bg-[var(--soft)] ${n.read ? "border-[var(--line)] bg-[var(--surface)]" : n.type === "live_note" ? "border-amber-400/30 bg-amber-500/10" : "border-[var(--accent)]/20 bg-[var(--soft)]/40"}`}
                     >
-                      <span className="mt-0.5 shrink-0 text-[var(--accent)]">
-                        {n.type === "mention" ? <AtSign size={14} aria-hidden="true" /> : n.type === "new_event" ? <CalendarCheck2 size={14} aria-hidden="true" /> : <MessageCircle size={14} aria-hidden="true" />}
+                      <span className={`mt-0.5 shrink-0 ${n.type === "live_note" ? "text-amber-500" : n.type === "mention" ? "text-[var(--accent)]" : n.type === "new_event" ? "text-[var(--accent)]" : "text-[var(--accent)]"}`}>
+                        {n.type === "live_note" ? <FileText size={14} aria-hidden="true" /> : n.type === "mention" ? <AtSign size={14} aria-hidden="true" /> : n.type === "new_event" ? <CalendarCheck2 size={14} aria-hidden="true" /> : <MessageCircle size={14} aria-hidden="true" />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">

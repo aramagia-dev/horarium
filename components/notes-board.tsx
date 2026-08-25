@@ -2,7 +2,8 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Copy, ExternalLink, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import { SubjectModal } from "@/components/subject-modal";
 import { notesChangedEvent, readLocalNotes } from "@/lib/notes-storage";
@@ -24,6 +25,10 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countsVersion, setCountsVersion] = useState(0);
+  const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
+  type LiveNoteCard = { id: string; subject_id: string; title: string; drive_web_view_link: string; drive_file_id: string; expires_at: string | null; created_at: string; is_active?: boolean };
+  const [liveMap, setLiveMap] = useState<Record<string, LiveNoteCard | null>>({});
+  const [liveCopiedId, setLiveCopiedId] = useState<string | null>(null);
   const subjectGroups = Array.from(new Map(schedule.map((entry) => [entry.code, entry])).values()).map((subject) => ({
     subject,
     entries: schedule.filter((entry) => entry.code === subject.code),
@@ -63,6 +68,74 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
     const entry = schedule.find((item) => item.subjectId === focus.subjectId);
     if (entry && entry.code !== selectedCode) setSelectedCode(entry.code);
   }, [focus, schedule, selectedCode]);
+
+  const fetchLiveForSubjects = useCallback(async (subjectIds: string[]) => {
+    if (!LIVE_NOTES_ENABLED || subjectIds.length === 0) return;
+    const entries = await Promise.all(
+      subjectIds.map(async (sid) => {
+        try {
+          const res = await fetch(`/api/drive/live-note?subjectId=${encodeURIComponent(sid)}`, { cache: "no-store" });
+          if (res.status === 404) return [sid, null] as const;
+          if (!res.ok) return [sid, null] as const;
+          const data = (await res.json().catch(() => null)) as LiveNoteCard | null;
+          if (!data || !data.id || !data.drive_web_view_link) return [sid, null] as const;
+          // Map url field variations: API may return url or drive_web_view_link
+          const normalized: LiveNoteCard = {
+            id: data.id,
+            subject_id: (data as unknown as { subject_id?: string }).subject_id ?? sid,
+            title: data.title ?? "Apuntes en vivo",
+            drive_web_view_link: data.drive_web_view_link ?? (data as unknown as { url?: string }).url ?? "",
+            drive_file_id: data.drive_file_id ?? "",
+            expires_at: data.expires_at ?? null,
+            created_at: data.created_at ?? new Date().toISOString(),
+            is_active: (data as unknown as { is_active?: boolean }).is_active ?? true,
+          };
+          if (!normalized.drive_web_view_link) return [sid, null] as const;
+          return [sid, normalized] as const;
+        } catch {
+          return [sid, null] as const;
+        }
+      }),
+    );
+    setLiveMap((prev) => {
+      const next = { ...prev };
+      for (const [sid, card] of entries) next[sid] = card;
+      return next;
+    });
+  }, [LIVE_NOTES_ENABLED]);
+
+  useEffect(() => {
+    const ids = Array.from(new Set(schedule.map((e) => e.subjectId)));
+    void fetchLiveForSubjects(ids);
+  }, [fetchLiveForSubjects, schedule]);
+
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail as { subjectId?: string } | undefined;
+      if (detail?.subjectId) void fetchLiveForSubjects([detail.subjectId]);
+      else {
+        const ids = Array.from(new Set(schedule.map((e) => e.subjectId)));
+        void fetchLiveForSubjects(ids);
+      }
+    };
+    window.addEventListener("horarium:live-notes-changed", handler as EventListener);
+    window.addEventListener("notifications-updated", handler as EventListener);
+    return () => {
+      window.removeEventListener("horarium:live-notes-changed", handler as EventListener);
+      window.removeEventListener("notifications-updated", handler as EventListener);
+    };
+  }, [fetchLiveForSubjects, schedule]);
+
+  const handleCopyLiveLink = useCallback(async (url: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setLiveCopiedId(id);
+      window.setTimeout(() => setLiveCopiedId((prev) => (prev === id ? null : prev)), 2000);
+    } catch {
+      // fallback: open prompt
+      window.prompt("Copiá el enlace:", url);
+    }
+  }, []);
 
   const subjects = subjectGroups.map(({ subject, entries }) => ({
     subject,
@@ -106,6 +179,46 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
         </motion.nav>
       </div>
       <div className="min-w-0 max-w-full overflow-x-hidden">
+        {selectedSubject && LIVE_NOTES_ENABLED && liveMap[selectedSubject.subjectId] ? (
+          <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+                  <span className="text-[10px] font-bold tracking-[0.14em] text-red-600 uppercase">EN VIVO</span>
+                  <span className="text-xs text-amber-700">{(() => {
+                    const c = liveMap[selectedSubject.subjectId]!;
+                    const d = c.created_at ? new Date(c.created_at) : new Date();
+                    const fecha = d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+                    const materia = selectedSubject.subject;
+                    return `${materia} — ${fecha}`;
+                  })()}</span>
+                </div>
+                <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--ink)]">
+                  <FileText size={14} className="shrink-0 text-amber-600" aria-hidden="true" /> {liveMap[selectedSubject.subjectId]!.title}
+                </p>
+                <p className="mt-1 text-xs text-amber-700">Documento colaborativo en Drive · se archiva tras 4 h (link persiste como editor anyone-with-link)</p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <a
+                  href={liveMap[selectedSubject.subjectId]!.drive_web_view_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
+                >
+                  <ExternalLink size={12} aria-hidden="true" /> Abrir en Drive
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyLiveLink(liveMap[selectedSubject.subjectId]!.drive_web_view_link, liveMap[selectedSubject.subjectId]!.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                >
+                  <Copy size={12} aria-hidden="true" /> {liveCopiedId === liveMap[selectedSubject.subjectId]!.id ? "¡Copiado!" : "Copiar link"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {selectedSubject ? <SubjectModal workspace subject={selectedSubject} sessions={selectedSessions} legacyEntryIds={[...selectedSessions.map((entry) => entry.id)]} highlightNoteId={focus?.subjectId === selectedSubject.subjectId ? focus.noteId : null} highlightCommentId={focus?.subjectId === selectedSubject.subjectId ? focus.commentId : null} onClose={() => undefined} /> : null}
       </div>
     </div>}

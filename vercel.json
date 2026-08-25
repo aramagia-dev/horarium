@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/archive-live-notes",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

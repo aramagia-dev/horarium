@@ -957,7 +957,7 @@ export function SubjectModal({
                     ["Profesor", contextSession.professor],
                     ["Sección", contextSession.section],
                     ["Aula", contextSession.room],
-                    ["Duración", `${minutes(contextSession.start, contextSession.end)} min`],
+                    ["Duración", formatDuration(contextSession.start, contextSession.end)],
                   ].map(([label, value]) => (
                     <div key={label} className="min-w-0">
                       <p className="flex items-center gap-1 text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">
@@ -1225,7 +1225,7 @@ export function SubjectModal({
                 ["Profesor", subject.professor],
                 ["Sección", subject.section],
                 ["Aula", subject.room],
-                ["Duración", `${minutes(subject.start, subject.end)} min`],
+                ["Duración", formatDuration(subject.start, subject.end)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl border border-[var(--line)] bg-[var(--background)] p-3">
                   <p className="text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">{label}</p>
@@ -1499,6 +1499,13 @@ function minutes(start: string, end: string) {
     return hours * 60 + minutes;
   };
   return toMinutes(end) - toMinutes(start);
+}
+
+function formatDuration(start: string, end: string) {
+  const total = minutes(start, end);
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  return `${hours}:${String(mins).padStart(2, "0")} hs`;
 }
 
 function fileAsDataUrl(file: File) {

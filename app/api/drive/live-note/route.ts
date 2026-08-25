@@ -46,7 +46,15 @@ function isDriveRetryableError(err: unknown): boolean {
   return false;
 }
 
+function isQuotaExceededError(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
+  const causeMsg = String((err as { cause?: { message?: string } })?.cause?.message ?? "").toLowerCase();
+  const combined = msg + " " + causeMsg;
+  return combined.includes("storage quota") || combined.includes("quota has been exceeded");
+}
+
 function mapDriveErrorStatus(err: unknown): number {
+  if (isQuotaExceededError(err)) return 507;
   if (isDriveRateLimitedError(err)) return 429;
   if (isDriveRetryableError(err)) return 502;
   return 500;
@@ -180,6 +188,9 @@ export async function POST(req: Request) {
     webViewLink = created.webViewLink;
   } catch (e) {
     console.error("[POST live-note] Drive files.create failed", e);
+    if (isQuotaExceededError(e)) {
+      return json({ error: "Cuota de Drive del Service Account excedida. Usá un Shared Drive o liberá espacio.", retryable: false, code: "QUOTA_EXCEEDED" }, 507);
+    }
     const status = mapDriveErrorStatus(e);
     const retryable = isDriveRetryableError(e) || isDriveRateLimitedError(e);
     return json({ error: "Drive error", retryable, code: "DRIVE_ERROR" }, status);
@@ -194,6 +205,9 @@ export async function POST(req: Request) {
       await deleteFile(fileId!);
     } catch (delErr) {
       console.error("[POST live-note] orphan delete after permission fail also failed", delErr);
+    }
+    if (isQuotaExceededError(e)) {
+      return json({ error: "Cuota de Drive del Service Account excedida. Usá un Shared Drive o liberá espacio.", retryable: false, code: "QUOTA_EXCEEDED" }, 507);
     }
     const status = mapDriveErrorStatus(e);
     const retryable = isDriveRetryableError(e) || isDriveRateLimitedError(e);

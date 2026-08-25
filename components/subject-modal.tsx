@@ -292,6 +292,11 @@ export function SubjectModal({
         setLiveError("Carpeta no configurada para esta materia. Contactá al administrador.");
         return;
       }
+      if (res.status === 507 || data.code === "QUOTA_EXCEEDED") {
+        setLiveError(data.error ?? "Cuota de Drive del Service Account excedida. Creá un Shared Drive y compartilo con el SA como Manager.");
+        setLiveRetryable(false);
+        return;
+      }
       if (res.status === 429 || data.retryable) {
         const after = typeof data.retryAfter === "number" ? ` Reintentá en ${data.retryAfter}s.` : "";
         setLiveError((data.error ?? "Límite alcanzado. Demasiadas solicitudes.") + after);

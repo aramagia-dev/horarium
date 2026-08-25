@@ -132,6 +132,21 @@ export async function POST(req: Request) {
 
   const supabase = getServiceClient();
 
+  // Auto-archive expired live notes for this subject (lazy expiry + unique index fix)
+  // Without this, an expired row with status='live' still blocks the partial unique index
+  // and causes a 23505 on insert that surfaces as a 409 without url (about:blank bug).
+  try {
+    const nowIsoForArchive = new Date().toISOString();
+    await supabase
+      .from("live_notes")
+      .update({ status: "archived", archived_at: nowIsoForArchive })
+      .eq("subject_id", subjectId)
+      .eq("status", "live")
+      .lte("expires_at", nowIsoForArchive);
+  } catch (e) {
+    console.warn("[POST live-note] auto-archive expired failed (non-fatal)", e);
+  }
+
   // Early 409 check: live exists and not expired (avoid Drive call when already live)
   try {
     const nowIso = new Date().toISOString();

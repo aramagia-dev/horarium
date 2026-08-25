@@ -227,19 +227,30 @@ export function SubjectModal({
   }, [loadNotes, workspace]);
 
   // ---- Live notes helpers (SA-owned Doc, max-1-live, anyone-with-link writer, external tab) ----
-  function openLiveUrl(url: string) {
-    // External link always — not iframe, persists after expiry as writer link
+  function openLiveUrl(url: string, pendingWin: Window | null = null) {
+    // If we already opened a blank tab synchronously (to avoid popup blocker), reuse it
+    if (pendingWin && !pendingWin.closed) {
+      try {
+        pendingWin.location.href = url;
+      } catch {
+        // If navigation fails, fallback to window.open
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+      void navigator.clipboard.writeText(url).catch(() => {});
+      setMessage("Apuntes en vivo abiertos en Drive. El enlace también se copió.");
+      window.dispatchEvent(new CustomEvent("notifications-updated"));
+      window.dispatchEvent(new CustomEvent("horarium:live-notes-changed", { detail: { subjectId: subject.subjectId } }));
+      return;
+    }
+    // Fallback: try to open (may be blocked if not from direct gesture)
     const opened = window.open(url, "_blank", "noopener,noreferrer");
-    // Copy-link fallback (toast via message or liveError)
     void navigator.clipboard.writeText(url).catch(() => {});
     if (!opened) {
       setMessage("Se copió el enlace. Pegalo en una pestaña nueva si no se abrió automáticamente.");
     } else {
       setMessage("Apuntes en vivo abiertos en Drive. El enlace también se copió.");
     }
-    // Notify bell listeners best-effort
     window.dispatchEvent(new CustomEvent("notifications-updated"));
-    // Trigger refresh of board pinned card
     window.dispatchEvent(new CustomEvent("horarium:live-notes-changed", { detail: { subjectId: subject.subjectId } }));
   }
 
@@ -249,6 +260,13 @@ export function SubjectModal({
       setLiveError("Iniciá sesión para crear apuntes en vivo.");
       setLiveRetryable(false);
       return;
+    }
+    // Open blank tab synchronously to preserve user gesture (avoids popup blocker after await)
+    let pendingWin: Window | null = null;
+    try {
+      pendingWin = window.open("about:blank", "_blank", "noopener,noreferrer");
+    } catch {
+      pendingWin = null;
     }
     setLiveLoading(true);
     setLiveError("");
@@ -262,6 +280,7 @@ export function SubjectModal({
       sessionToken = null;
     }
     if (!sessionToken) {
+      if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
       setLiveError("Sesión expirada. Iniciá sesión de nuevo.");
       setLiveLoading(false);
       return;
@@ -274,43 +293,50 @@ export function SubjectModal({
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; url?: string; existing?: boolean; code?: string; error?: string; retryable?: boolean; retryAfter?: number };
       if (res.status === 201 && data.url) {
-        openLiveUrl(data.url);
+        openLiveUrl(data.url, pendingWin);
         return;
       }
       if (res.status === 409 && data.url) {
         // Redirect to existing live doc (max-1 per subject)
-        openLiveUrl(data.url);
+        openLiveUrl(data.url, pendingWin);
         setLiveError("");
         setMessage("Ya existe un apunte en vivo para esta materia. Se abrió el documento vigente.");
         return;
       }
       if (res.status === 401) {
+        if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
         setLiveError("Sesión expirada. Iniciá sesión de nuevo.");
         return;
       }
       if (res.status === 422 && data.code === "FOLDER_NOT_CONFIGURED") {
+        if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
         setLiveError("Carpeta no configurada para esta materia. Contactá al administrador.");
         return;
       }
       if (res.status === 507 || data.code === "QUOTA_EXCEEDED") {
+        if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
         setLiveError(data.error ?? "Cuota de Drive del Service Account excedida. Creá un Shared Drive y compartilo con el SA como Manager.");
         setLiveRetryable(false);
         return;
       }
       if (res.status === 429 || data.retryable) {
+        if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
         const after = typeof data.retryAfter === "number" ? ` Reintentá en ${data.retryAfter}s.` : "";
         setLiveError((data.error ?? "Límite alcanzado. Demasiadas solicitudes.") + after);
         setLiveRetryable(true);
         return;
       }
       if (res.status === 502 || data.retryable) {
+        if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
         setLiveError(data.error ?? "Drive no disponible. Reintentá en unos segundos.");
         setLiveRetryable(true);
         return;
       }
+      if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
       setLiveError(data.error ?? "No se pudo crear el apunte en vivo.");
       if (data.retryable) setLiveRetryable(true);
     } catch {
+      if (pendingWin && !pendingWin.closed) try { pendingWin.close(); } catch {}
       setLiveError("Error de red. Reintentá.");
       setLiveRetryable(true);
     } finally {

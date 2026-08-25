@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase-server";
-import { getDriveClient, isGoogleDriveConfigured } from "@/lib/google-drive";
+import { getDriveAuthMode, getDriveClient, isGoogleDriveConfigured } from "@/lib/google-drive";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +34,15 @@ export async function GET(req: NextRequest) {
       perms = String((e as { message?: string })?.message ?? e);
     }
 
-    // Try a cheap create+delete dry-run in Shared Drive? No, just report meta.
+    const mode = getDriveAuthMode();
+    const hint =
+      mode === "oauth"
+        ? "Modo OAuth (tu Gmail) — 'Mi unidad' está OK, usa tu cuota de 15GB. Si da 507, es que tu Gmail está lleno."
+        : !meta.data.driveId
+          ? "CARPETA EN 'Mi unidad' con Service Account — va a dar 507. Usá Shared Drive o pasate a OAuth."
+          : "Carpeta en Shared Drive OK (SA) — si sigue 507, verificá que el SA sea Gestor del Shared Drive, no solo Editor de la carpeta.";
     return NextResponse.json({
+      mode,
       folder: {
         id: meta.data.id,
         name: meta.data.name,
@@ -49,9 +56,7 @@ export async function GET(req: NextRequest) {
       perms,
       quota: about.data.storageQuota,
       saUser: about.data.user,
-      hint: !meta.data.driveId
-        ? "CARPETA EN 'Mi unidad' — va a dar 507. Movela a Unidades compartidas > Horarium."
-        : "Carpeta en Shared Drive OK — si sigue 507, verificá que el SA sea Gestor del Shared Drive, no solo Editor de la carpeta.",
+      hint,
     });
   } catch (e) {
     const msg = (e as { message?: string })?.message ?? String(e);

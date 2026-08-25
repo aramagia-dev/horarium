@@ -2,16 +2,17 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { google, drive_v3 } from "googleapis";
-import { JWT } from "google-auth-library";
+import { JWT, OAuth2Client } from "google-auth-library";
 
 /**
- * Google Drive singleton via Service Account JWT.
- * - Credentials from GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON (base64 JSON, server-only)
- * - No NEXT_PUBLIC prefix, never exposed to client
- * - Singleton so token refresh is shared per server instance
+ * Google Drive singleton — supports two auth modes:
+ *  1. OAuth (personal Gmail, recommended for non-Workspace): CLIENT_ID/SECRET/REFRESH_TOKEN
+ *  2. Service Account JWT (Workspace + Shared Drive): GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON (base64)
+ * OAuth takes precedence when configured.
  */
 
 let cachedJwt: JWT | null = null;
+let cachedOAuth: OAuth2Client | null = null;
 let cachedDrive: drive_v3.Drive | null = null;
 
 export type ServiceAccountJson = {
@@ -20,8 +21,33 @@ export type ServiceAccountJson = {
   token_uri?: string;
 };
 
-export function isGoogleDriveConfigured(): boolean {
+export function isOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+  );
+}
+
+export function isServiceAccountConfigured(): boolean {
   return Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON);
+}
+
+export function isGoogleDriveConfigured(): boolean {
+  return isOAuthConfigured() || isServiceAccountConfigured();
+}
+
+export function getDriveAuthMode(): "oauth" | "service_account" | "none" {
+  if (isOAuthConfigured()) return "oauth";
+  if (isServiceAccountConfigured()) return "service_account";
+  return "none";
+}
+
+export function getOAuthRedirectUri(): string {
+  return (
+    process.env.GOOGLE_OAUTH_REDIRECT_URI ??
+    "https://horarium-aramagia.vercel.app/api/auth/google/callback"
+  );
 }
 
 function decodeServiceAccount(): ServiceAccountJson {
@@ -56,16 +82,37 @@ export function getJwtClient(): JWT {
   return cachedJwt;
 }
 
+export function getOAuth2Client(): OAuth2Client {
+  if (cachedOAuth) return cachedOAuth;
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error("GOOGLE_OAUTH not fully configured (CLIENT_ID/SECRET/REFRESH_TOKEN)");
+  }
+  const oAuth2Client = new OAuth2Client(clientId, clientSecret, getOAuthRedirectUri());
+  oAuth2Client.setCredentials({ refresh_token: refreshToken });
+  cachedOAuth = oAuth2Client;
+  return oAuth2Client;
+}
+
+/** Returns the active auth client (OAuth preferred, else JWT) */
+function getAuthClient(): OAuth2Client | JWT {
+  if (isOAuthConfigured()) return getOAuth2Client();
+  return getJwtClient();
+}
+
 export function getDriveClient(): drive_v3.Drive {
   if (cachedDrive) return cachedDrive;
-  const auth = getJwtClient();
+  const auth = getAuthClient();
   cachedDrive = google.drive({ version: "v3", auth: auth as unknown as never });
   return cachedDrive;
 }
 
-/** For tests: reset singleton */
+/** For tests: reset singletons */
 export function resetDriveClientForTests() {
   cachedJwt = null;
+  cachedOAuth = null;
   cachedDrive = null;
 }
 

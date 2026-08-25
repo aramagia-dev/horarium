@@ -254,10 +254,22 @@ export function SubjectModal({
     setLiveError("");
     setLiveRetryable(false);
     setMessage("");
+    let sessionToken: string | null = null;
+    try {
+      const { data } = await (supabase?.auth.getSession() ?? { data: { session: null } } as unknown as { data: { session: { access_token: string } | null } });
+      sessionToken = (data as { session?: { access_token?: string } | null })?.session?.access_token ?? null;
+    } catch {
+      sessionToken = null;
+    }
+    if (!sessionToken) {
+      setLiveError("Sesión expirada. Iniciá sesión de nuevo.");
+      setLiveLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/drive/live-note", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({ subjectId: subject.subjectId }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; url?: string; existing?: boolean; code?: string; error?: string; retryable?: boolean; retryAfter?: number };

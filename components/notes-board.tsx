@@ -71,10 +71,18 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
 
   const fetchLiveForSubjects = useCallback(async (subjectIds: string[]) => {
     if (!LIVE_NOTES_ENABLED || subjectIds.length === 0) return;
+    let token: string | null = null;
+    try {
+      const { data } = await (supabase?.auth.getSession() ?? { data: { session: null } } as unknown as { data: { session: { access_token: string } | null } });
+      token = (data as { session?: { access_token?: string } | null })?.session?.access_token ?? null;
+    } catch {
+      token = null;
+    }
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const entries = await Promise.all(
       subjectIds.map(async (sid) => {
         try {
-          const res = await fetch(`/api/drive/live-note?subjectId=${encodeURIComponent(sid)}`, { cache: "no-store" });
+          const res = await fetch(`/api/drive/live-note?subjectId=${encodeURIComponent(sid)}`, { cache: "no-store", headers: authHeaders });
           if (res.status === 404) return [sid, null] as const;
           if (!res.ok) return [sid, null] as const;
           const raw = (await res.json().catch(() => null)) as { live?: LiveNoteCard | null } | null;

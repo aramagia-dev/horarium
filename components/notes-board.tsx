@@ -77,7 +77,9 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
           const res = await fetch(`/api/drive/live-note?subjectId=${encodeURIComponent(sid)}`, { cache: "no-store" });
           if (res.status === 404) return [sid, null] as const;
           if (!res.ok) return [sid, null] as const;
-          const data = (await res.json().catch(() => null)) as LiveNoteCard | null;
+          const raw = (await res.json().catch(() => null)) as { live?: LiveNoteCard | null } | null;
+          const data = (raw?.live ?? null) as LiveNoteCard | null;
+          if (data && data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) return [sid, null] as const;
           if (!data || !data.id || !data.drive_web_view_link) return [sid, null] as const;
           // Map url field variations: API may return url or drive_web_view_link
           const normalized: LiveNoteCard = {
@@ -91,6 +93,7 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
             is_active: (data as unknown as { is_active?: boolean }).is_active ?? true,
           };
           if (!normalized.drive_web_view_link) return [sid, null] as const;
+          if (normalized.expires_at && new Date(normalized.expires_at).getTime() <= Date.now()) return [sid, null] as const;
           return [sid, normalized] as const;
         } catch {
           return [sid, null] as const;

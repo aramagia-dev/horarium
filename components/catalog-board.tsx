@@ -13,9 +13,11 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const visibleGroups = groups.filter((g) => g.items.length > 0);
   const reduced = useReducedMotion();
 
+  const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
+
   return (
-    <section aria-label={title} className="mx-auto w-full max-w-5xl min-w-0 max-w-full overflow-x-hidden">
-      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-7">
+    <section aria-label={title} className="mx-auto w-full max-w-5xl min-w-0 max-w-full overflow-x-hidden px-4 sm:px-0">
+      <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-8">
         <h1 className="text-[22px] font-bold tracking-[-0.03em] text-[var(--ink)]">{title}</h1>
         <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{description}</p>
       </motion.div>
@@ -24,7 +26,7 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
           <p className="text-sm text-[var(--muted)]">{kind === "rooms" ? "No hay aulas con clases asignadas esta semana." : kind === "professors" ? "No hay docentes con clases asignadas esta semana." : "No hay materias para mostrar."}</p>
         </motion.div>
       ) : (
-        <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="grid w-full max-w-full min-w-0 gap-4 overflow-hidden sm:grid-cols-2">
+        <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="grid w-full max-w-full min-w-0 gap-5 overflow-hidden sm:grid-cols-2">
           {visibleGroups.map((group) => (
             <motion.article
               key={group.key}
@@ -35,17 +37,37 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
             >
               <p className="text-xs font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{group.label}</p>
               {kind === "subjects" && group.items[0] ? (
-                <motion.button
-                  type="button"
-                  whileHover={reduced ? undefined : { scale: 1.01 }}
-                  whileTap={reduced ? undefined : { scale: 0.99 }}
-                  onClick={() => onSelectSubject(group.items[0])}
-                  className="mt-3 w-full rounded-xl bg-[var(--background)] p-4 text-left transition hover:border-[var(--accent)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                >
-                  <span className="text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">{group.items[0].code} · {Array.from(new Set(group.items.map((item) => item.section))).join(" · ")}</span>
-                  <strong className="mt-2 block break-words text-sm text-[var(--ink)]">{group.title}</strong>
-                  <span className="mt-2 block text-xs text-[var(--muted)]">{group.items.length} sesiones semanales</span>
-                </motion.button>
+                <>
+                  <motion.button
+                    type="button"
+                    whileHover={reduced ? undefined : { scale: 1.01 }}
+                    whileTap={reduced ? undefined : { scale: 0.99 }}
+                    onClick={() => onSelectSubject(group.items[0])}
+                    className="mt-3 w-full rounded-xl bg-[var(--background)] p-4 text-left transition hover:border-[var(--accent)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                  >
+                    <span className="text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">{group.items[0].code} · {Array.from(new Set(group.items.map((item) => item.section))).join(" · ")}</span>
+                    <strong className="mt-2 block break-words text-sm text-[var(--ink)]">{group.title}</strong>
+                    <span className="mt-2 block text-xs text-[var(--muted)]">{group.items.length} sesiones semanales</span>
+                  </motion.button>
+                  {LIVE_NOTES_ENABLED ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectSubject(group.items[0]!);
+                        // give the modal a tick to mount, then focus the live-notes CTA
+                        window.setTimeout(() => {
+                          document.getElementById("live-notes-cta")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          document.getElementById("live-notes-cta")?.focus();
+                        }, 250);
+                      }}
+                      aria-label={`Apuntes en vivo para ${group.title}`}
+                      className="mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/10 hover:text-amber-800 dark:text-amber-300 dark:hover:bg-amber-500/15 dark:hover:text-amber-200 focus-visible:outline-2 focus-visible:outline-amber-500"
+                    >
+                      ↗ Apuntes en vivo
+                    </button>
+                  ) : null}
+                </>
               ) : (
                 <ul className="mt-3 space-y-2">
                   {group.items.map((entry) => (

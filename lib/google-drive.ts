@@ -46,7 +46,7 @@ export function getDriveAuthMode(): "oauth" | "service_account" | "none" {
 export function getOAuthRedirectUri(): string {
   return (
     process.env.GOOGLE_OAUTH_REDIRECT_URI ??
-    "https://horarium-aramagia.vercel.app/api/auth/google/callback"
+    "https://horarium-indol.vercel.app/api/auth/google/callback"
   );
 }
 

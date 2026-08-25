@@ -1503,6 +1503,7 @@ function minutes(start: string, end: string) {
 
 function formatDuration(start: string, end: string) {
   const total = minutes(start, end);
+  if (total < 60) return `${total} min`;
   const hours = Math.floor(total / 60);
   const mins = total % 60;
   return `${hours}:${String(mins).padStart(2, "0")} hs`;

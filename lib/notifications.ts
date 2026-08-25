@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { AcademicEvent } from "@/lib/academic-events";
 
-export type NotificationType = "new_comment" | "mention" | "new_event";
+export type NotificationType = "new_comment" | "mention" | "new_event" | "live_note";
 
 export type Notification = {
   id: string;

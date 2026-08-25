@@ -857,26 +857,6 @@ export function SubjectModal({
 
         {workspace ? (
           <>
-            {LIVE_NOTES_ENABLED ? (
-              <div
-                id="live-notes-cta"
-                className="sticky top-0 z-20 -mx-4 -mt-6 mb-2 flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-amber-50/80 sm:-mx-6 lg:-mx-10 xl:-mx-16 sm:px-6 lg:px-10 xl:px-16 dark:border-amber-900/50 dark:bg-amber-950/40"
-              >
-                <button
-                  type="button"
-                  onClick={() => void handleCreateLiveNote()}
-                  disabled={liveLoading || !userId}
-                  title={!userId ? "Iniciá sesión para crear apuntes en vivo" : "Crea un Google Doc colaborativo (4h, anyone-with-link writer)"}
-                  aria-label="Apuntes en vivo — Google Doc colaborativo (4h)"
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold shadow-sm transition focus-visible:outline-2 focus-visible:outline-amber-500 ${liveLoading || !userId ? "cursor-not-allowed border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100" : "bg-amber-500 text-white hover:bg-amber-600"}`}
-                >
-                  {liveLoading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
-                  {!userId ? "Iniciá sesión — Apuntes en vivo" : "Apuntes en vivo — Google Doc colaborativo (4h)"}
-                </button>
-                {liveLoading ? <span className="text-xs font-medium text-amber-800 dark:text-amber-200">Creando documento…</span> : null}
-                {!userId && !liveLoading ? <span className="text-xs font-medium text-amber-800 dark:text-amber-200">Iniciá sesión para crear el Doc colaborativo.</span> : null}
-              </div>
-            ) : null}
             <div className="mt-2 min-w-0 max-w-full overflow-x-hidden">
               <div className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -925,7 +905,7 @@ export function SubjectModal({
                     disabled={liveLoading || !userId}
                     title={!userId ? "Iniciá sesión para crear apuntes en vivo" : "Crea un Google Doc colaborativo (4h, anyone-with-link writer)"}
                     aria-label="Apuntes en vivo — Google Doc colaborativo (4h)"
-                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold shadow-sm transition focus-visible:outline-2 focus-visible:outline-amber-500 ${liveLoading || !userId ? "cursor-not-allowed border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100" : "bg-amber-500 text-white hover:bg-amber-600"}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold shadow-sm transition focus-visible:outline-2 focus-visible:outline-amber-500 ${liveLoading || !userId ? "cursor-not-allowed border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100" : "bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500"}`}
                   >
                     {liveLoading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
                     {!userId ? "Iniciá sesión — Apuntes en vivo" : "Apuntes en vivo — Google Doc colaborativo (4h)"}
@@ -935,10 +915,10 @@ export function SubjectModal({
                 </div>
               ) : null}
               {liveError ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:border-amber-600/30 dark:bg-amber-500/15 dark:text-amber-200">
                   <span className="flex-1 break-words">{liveError}</span>
                   {liveRetryable ? (
-                    <button type="button" onClick={() => void handleCreateLiveNote()} className="shrink-0 rounded bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600">
+                    <button type="button" onClick={() => void handleCreateLiveNote()} className="shrink-0 rounded bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500">
                       Reintentar
                     </button>
                   ) : null}
@@ -1233,27 +1213,6 @@ export function SubjectModal({
           </>
         ) : (
           <>
-            {LIVE_NOTES_ENABLED ? (
-              <div
-                id="live-notes-cta-mobile"
-                className="sticky top-0 z-20 -mx-6 -mt-6 mb-2 flex flex-col gap-1.5 border-b border-amber-200 bg-amber-50/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-amber-50/80 sm:-mx-8 sm:px-8 dark:border-amber-900/50 dark:bg-amber-950/40"
-              >
-                <button
-                  type="button"
-                  id="live-notes-cta"
-                  onClick={() => void handleCreateLiveNote()}
-                  disabled={liveLoading || !userId}
-                  title={!userId ? "Iniciá sesión para crear apuntes en vivo" : "Crea un Google Doc colaborativo (4h, anyone-with-link writer)"}
-                  aria-label="Apuntes en vivo — Google Doc colaborativo (4h)"
-                  className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold shadow-sm transition focus-visible:outline-2 focus-visible:outline-amber-500 ${liveLoading || !userId ? "cursor-not-allowed border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100" : "bg-amber-500 text-white hover:bg-amber-600"}`}
-                >
-                  {liveLoading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
-                  {!userId ? "Iniciá sesión — Apuntes en vivo" : "Apuntes en vivo — Google Doc colaborativo (4h)"}
-                </button>
-                {!userId && !liveLoading ? <span className="text-center text-xs font-medium text-amber-800 dark:text-amber-200">Iniciá sesión para crear el Doc colaborativo.</span> : null}
-                {liveLoading ? <span className="text-center text-xs font-medium text-amber-800 dark:text-amber-200">Creando documento…</span> : null}
-              </div>
-            ) : null}
             <h2 id="subject-title" className="mt-6 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
               {subject.subject}
             </h2>
@@ -1306,7 +1265,7 @@ export function SubjectModal({
                   disabled={liveLoading || !userId}
                   title={!userId ? "Iniciá sesión para crear apuntes en vivo" : "Crea un Google Doc colaborativo (4h, anyone-with-link writer)"}
                   aria-label="Apuntes en vivo — Google Doc colaborativo (4h)"
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-semibold shadow-sm transition focus-visible:outline-2 focus-visible:outline-amber-500 ${liveLoading || !userId ? "cursor-not-allowed border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100" : "bg-amber-500 text-white hover:bg-amber-600"}`}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-semibold shadow-sm transition focus-visible:outline-2 focus-visible:outline-amber-500 ${liveLoading || !userId ? "cursor-not-allowed border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100" : "bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500"}`}
                 >
                   {liveLoading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
                   {!userId ? "Iniciá sesión — Apuntes en vivo" : "Apuntes en vivo — Google Doc colaborativo (4h)"}
@@ -1314,10 +1273,10 @@ export function SubjectModal({
                 {!userId && !liveLoading ? <span className="text-xs font-medium text-amber-800 dark:text-amber-200">Iniciá sesión para crear el Doc colaborativo.</span> : null}
                 {liveLoading ? <span className="text-xs font-medium text-amber-800 dark:text-amber-200">Creando documento…</span> : null}
                 {liveError ? (
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:border-amber-600/30 dark:bg-amber-500/15 dark:text-amber-200">
                     <span className="flex-1 break-words">{liveError}</span>
                     {liveRetryable ? (
-                      <button type="button" onClick={() => void handleCreateLiveNote()} className="shrink-0 rounded bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600">
+                      <button type="button" onClick={() => void handleCreateLiveNote()} className="shrink-0 rounded bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500">
                         Reintentar
                       </button>
                     ) : null}

@@ -287,6 +287,24 @@ export async function deleteAcademicEvent(id: string) {
   return { error: "" };
 }
 
+// Best-effort fan-out: never blocks toggle, exclude actor via server, vencido still notifies, batch 100 server-side
+async function triggerEventCompletedNotification(eventId: string) {
+  try {
+    if (!supabase || typeof window === "undefined") return;
+    const { data } = await supabase.auth.getSession();
+    const token = (data as { session?: { access_token?: string } })?.session?.access_token ?? null;
+    if (!token) return;
+    // fire-and-forget: do not await
+    void fetch("/api/events/notify-completion", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ eventId }),
+    }).catch(() => {});
+  } catch {
+    // best-effort
+  }
+}
+
 export async function toggleIndividualCompletion(eventId: string): Promise<{ error: string }> {
   if (!eventId) return { error: "Evento requerido." };
   if (!supabaseConfigured || !supabase) {
@@ -335,11 +353,13 @@ export async function toggleIndividualCompletion(eventId: string): Promise<{ err
       const code = (ins.error as { code?: string }).code;
       if (code === "23505") {
         if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
+        triggerEventCompletedNotification(eventId);
         return { error: "" };
       }
       return { error: ins.error.message };
     }
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
+    triggerEventCompletedNotification(eventId);
     return { error: "" };
   }
 }
@@ -389,11 +409,13 @@ export async function toggleGroupCompletion(eventId: string): Promise<{ error: s
       // treat upsert race as success
       if (code === "23505") {
         if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
+        triggerEventCompletedNotification(eventId);
         return { error: "" };
       }
       return { error: upd.error.message };
     }
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
+    triggerEventCompletedNotification(eventId);
     return { error: "" };
   }
 }

@@ -84,6 +84,13 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     } catch {}
   }, [completionFilter]);
 
+  // notification bell requests Todos to highlight completed event (event_completed grouped)
+  useEffect(() => {
+    const onShowTodos = () => setCompletionFilter("todos");
+    window.addEventListener("horarium:events-show-todos", onShowTodos as EventListener);
+    return () => window.removeEventListener("horarium:events-show-todos", onShowTodos as EventListener);
+  }, []);
+
   useEffect(() => {
     setEvents(initialEvents as unknown as EnrichedEvent[]);
   }, [initialEvents]);

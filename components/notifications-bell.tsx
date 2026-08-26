@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AtSign, Bell, CalendarCheck2, FileText, MessageCircle } from "lucide-react";
+import { AtSign, Bell, CalendarCheck2, CheckCircle, FileText, MessageCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { dropdownVariants, useReducedMotion } from "@/lib/motion";
 import { useAuth } from "@/lib/auth-context";
@@ -132,6 +132,15 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
       }
     }
     setOpen(false);
+    // event_completed: force Todos filter so completed event is visible then highlight via scroll
+    if (n.type === "event_completed" && n.event_id) {
+      try {
+        window.localStorage.setItem("horarium:events-completion-filter", "todos");
+        window.dispatchEvent(new CustomEvent("horarium:events-show-todos"));
+      } catch {
+        // ignore
+      }
+    }
     // live_note: open external Drive link in new tab (body is webViewLink), not Horarium nav
     if (n.type === "live_note") {
       const url = n.body?.trim();
@@ -270,10 +279,10 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
                       <button
                       type="button"
                       onClick={() => void handleSelect(n)}
-                      className={`flex w-full gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:bg-[var(--soft)] ${n.read ? "border-[var(--line)] bg-[var(--surface)]" : n.type === "live_note" ? "border-amber-400/30 bg-amber-500/10" : "border-[var(--accent)]/20 bg-[var(--soft)]/40"}`}
+                      className={`flex w-full gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:bg-[var(--soft)] ${n.read ? "border-[var(--line)] bg-[var(--surface)]" : n.type === "event_completed" ? "border-emerald-400/30 bg-emerald-500/10" : n.type === "live_note" ? "border-amber-400/30 bg-amber-500/10" : "border-[var(--accent)]/20 bg-[var(--soft)]/40"}`}
                     >
-                      <span className={`mt-0.5 shrink-0 ${n.type === "live_note" ? "text-amber-500" : n.type === "mention" ? "text-[var(--accent)]" : n.type === "new_event" ? "text-[var(--accent)]" : "text-[var(--accent)]"}`}>
-                        {n.type === "live_note" ? <FileText size={14} aria-hidden="true" /> : n.type === "mention" ? <AtSign size={14} aria-hidden="true" /> : n.type === "new_event" ? <CalendarCheck2 size={14} aria-hidden="true" /> : <MessageCircle size={14} aria-hidden="true" />}
+                      <span className={`mt-0.5 shrink-0 ${n.type === "event_completed" ? "text-emerald-500" : n.type === "live_note" ? "text-amber-500" : n.type === "mention" ? "text-[var(--accent)]" : n.type === "new_event" ? "text-[var(--accent)]" : "text-[var(--accent)]"}`}>
+                        {n.type === "event_completed" ? <CheckCircle size={14} aria-hidden="true" /> : n.type === "live_note" ? <FileText size={14} aria-hidden="true" /> : n.type === "mention" ? <AtSign size={14} aria-hidden="true" /> : n.type === "new_event" ? <CalendarCheck2 size={14} aria-hidden="true" /> : <MessageCircle size={14} aria-hidden="true" />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">

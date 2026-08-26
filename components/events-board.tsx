@@ -25,6 +25,13 @@ import {
 import type { Subject } from "@/lib/schedule-data";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { hoverTransition, pageVariants, springTransition, staggerContainer, staggerItem, subtleCardHover, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import {
+  filterEventsByCompletion,
+  getCompletionCounts,
+  getVisibleAvatars,
+  sortEventsAsc,
+  sortForTodos,
+} from "@/lib/event-completion-board";
 
 const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", recuperatorio: "Recuperatorio", exposición: "Exposición", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
 const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, description: "", status: "pending", event_type: "individual" };
@@ -102,35 +109,19 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     return () => { active = false; window.removeEventListener("horarium:events-changed", refresh); };
   }, []);
 
-  // helper: isCompletedByMe safe accessor (EnrichedEvent guarantees, but fallback for raw AcademicEvent)
-  const getIsCompleted = useCallback((e: EnrichedEvent) => Boolean((e as EnrichedEvent).isCompletedByMe), []);
+
 
   const otherFiltered = useMemo(() => {
     return (events as EnrichedEvent[]).filter((event) => (typeFilter === "all" || event.type === typeFilter) && (statusFilter === "all" || event.status === statusFilter) && (subjectFilter === "all" || event.subject_id === subjectFilter));
   }, [events, statusFilter, subjectFilter, typeFilter]);
 
-  const counts = useMemo(() => {
-    const pend = otherFiltered.filter((e) => !getIsCompleted(e)).length;
-    const comp = otherFiltered.filter((e) => getIsCompleted(e)).length;
-    const venc = otherFiltered.filter((e) => isEventOverdue(e as AcademicEvent, getIsCompleted(e))).length;
-    return { pendientes: pend, completados: comp, todos: otherFiltered.length, vencidos: venc };
-  }, [otherFiltered, getIsCompleted]);
+  const counts = useMemo(() => getCompletionCounts(otherFiltered as EnrichedEvent[]), [otherFiltered]);
 
   const visibleEvents = useMemo(() => {
-    let list = [...otherFiltered];
-    if (completionFilter === "pendientes") list = list.filter((e) => !getIsCompleted(e));
-    else if (completionFilter === "completados") list = list.filter((e) => getIsCompleted(e));
-    else if (completionFilter === "vencidos") list = list.filter((e) => isEventOverdue(e as AcademicEvent, getIsCompleted(e)));
-    // Todos: no filter
-
-    const sortAsc = (a: EnrichedEvent, b: EnrichedEvent) => `${a.date}${a.time?.slice(0, 5) ?? "99:99"}`.localeCompare(`${b.date}${b.time?.slice(0, 5) ?? "99:99"}`);
-    if (completionFilter === "todos") {
-      const pending = list.filter((e) => !getIsCompleted(e)).sort(sortAsc);
-      const done = list.filter((e) => getIsCompleted(e)).sort(sortAsc);
-      return [...pending, ...done];
-    }
-    return list.sort(sortAsc);
-  }, [otherFiltered, completionFilter, getIsCompleted]);
+    const filtered = filterEventsByCompletion(otherFiltered as EnrichedEvent[], completionFilter);
+    if (completionFilter === "todos") return sortForTodos(filtered);
+    return sortEventsAsc(filtered);
+  }, [otherFiltered, completionFilter]);
   const selectedEvent = selectedEventId ? events.find((event) => event.id === selectedEventId) : undefined;
   const selectedEventVisible = selectedEvent ? visibleEvents.some((event) => event.id === selectedEvent.id) : false;
   useEffect(() => {
@@ -363,8 +354,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
               const completers = (ee.completers ?? []) as Array<{ user_id: string; display_name: string | null; avatar_url: string | null; completed_at: string | null }>;
               const count = (ee.completedCount ?? completers.length) as number;
               const showAvatars = count > 0;
-              const visibleAvatars = completers.slice(0, 3);
-              const extra = Math.max(0, count - 3);
+              const { visible: visibleAvatars, extra } = getVisibleAvatars(completers as unknown as import("@/lib/academic-events").Completer[], 3);
               const titleClass = isCompleted ? "line-through decoration-2 opacity-70 text-[var(--muted)]" : "text-[var(--ink)]";
               const cardExtra = isCompleted ? "opacity-60 bg-[var(--surface)] border-dashed" : "";
               return (

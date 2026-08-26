@@ -287,12 +287,38 @@ insert into public.professors (normalized_name, display_name) values
 on conflict (normalized_name) do update set display_name = excluded.display_name;
 insert into public.rooms (name) values ('Aula por confirmar') on conflict (name) do nothing;
 
--- Notifications (hybrid A): persisted new_comment, mention, new_event; event_due derived client-side
+-- Event completion: hybrid model columns for grupal + per-user join table (individual)
+alter table public.academic_events add column if not exists event_type text;
+alter table public.academic_events add column if not exists completed_by uuid references public.profiles(id) on delete set null;
+alter table public.academic_events add column if not exists completed_at timestamptz;
+update public.academic_events set event_type = 'individual' where event_type is null;
+do $$
+begin
+  begin execute 'alter table public.academic_events alter column event_type set default ''individual'''; exception when others then null; end;
+  if not exists (select 1 from pg_constraint where conname = 'academic_events_event_type_check' and conrelid = 'public.academic_events'::regclass) then
+    begin execute 'alter table public.academic_events add constraint academic_events_event_type_check check (event_type in (''individual'',''grupal''))'; exception when duplicate_object then null; end;
+  end if;
+end $$;
+create table if not exists public.academic_event_completions (
+  id uuid not null default gen_random_uuid(),
+  event_id uuid not null references public.academic_events(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  completed_at timestamptz not null default now(),
+  primary key (event_id, user_id),
+  unique (id)
+);
+create unique index if not exists academic_event_completions_id_uidx on public.academic_event_completions(id);
+create index if not exists academic_event_completions_event_user_idx on public.academic_event_completions(event_id, user_id);
+create index if not exists academic_events_completed_at_idx on public.academic_events(completed_at);
+create index if not exists academic_event_completions_user_idx on public.academic_event_completions(user_id);
+create index if not exists academic_event_completions_event_idx on public.academic_event_completions(event_id);
+
+-- Notifications (hybrid A): persisted new_comment, mention, new_event; event_due derived client-side; event_completed (grouped)
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   actor_id uuid references auth.users(id) on delete set null,
-  type text not null check (type in ('new_comment','mention','new_event')),
+  type text not null check (type in ('new_comment','mention','new_event','live_note','event_completed')),
   title text not null,
   body text not null,
   note_id uuid references public.notes(id) on delete cascade,
@@ -303,6 +329,7 @@ create table if not exists public.notifications (
 );
 create index if not exists notifications_user_read_created_idx on public.notifications(user_id, read, created_at desc);
 create index if not exists notifications_user_created_idx on public.notifications(user_id, created_at desc);
+create unique index if not exists notifications_user_event_completed_uidx on public.notifications(user_id, event_id) where type = 'event_completed';
 grant select, insert, update, delete on public.notifications to authenticated;
 alter table public.notifications enable row level security;
 drop policy if exists "Users select own notifications" on public.notifications;
@@ -313,6 +340,19 @@ drop policy if exists "Users update own notifications" on public.notifications;
 create policy "Users update own notifications" on public.notifications for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 drop policy if exists "Users delete own notifications" on public.notifications;
 create policy "Users delete own notifications" on public.notifications for delete to authenticated using (user_id = auth.uid());
+
+-- Event completion RLS: academic_event_completions (own-row) + grupal toggle (any auth)
+grant select, insert, delete on public.academic_event_completions to authenticated;
+alter table public.academic_event_completions enable row level security;
+drop policy if exists "Auth read completions" on public.academic_event_completions;
+create policy "Auth read completions" on public.academic_event_completions for select to authenticated using (true);
+drop policy if exists "Auth insert own completion" on public.academic_event_completions;
+create policy "Auth insert own completion" on public.academic_event_completions for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists "Auth delete own completion" on public.academic_event_completions;
+create policy "Auth delete own completion" on public.academic_event_completions for delete to authenticated using (user_id = auth.uid());
+grant select, update on public.academic_events to anon, authenticated;
+drop policy if exists "Auth toggle grupal completion" on public.academic_events;
+create policy "Auth toggle grupal completion" on public.academic_events for update to authenticated using (auth.uid() is not null) with check (auth.uid() is not null and (completed_by = auth.uid() or completed_by is null));
 
 -- After creating the first Auth user, promote it with:
 -- update public.profiles set role = 'admin' where id = 'USER-UUID';

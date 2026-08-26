@@ -181,17 +181,22 @@ export async function POST(req: Request) {
     return json({ error: "Folder not configured for subject", code: "FOLDER_NOT_CONFIGURED" }, 422);
   }
 
-  // Resolve subject name for doc title
+  // Resolve subject code for doc title (simplified: "ASI - 2026-08-26")
+  let subjectCode = "";
   let subjectName = subjectId;
   try {
-    const { data: subj } = await supabase.from("subjects").select("name").eq("id", subjectId).maybeSingle();
-    if (subj && typeof (subj as { name?: string }).name === "string" && (subj as { name: string }).name.trim()) {
-      subjectName = (subj as { name: string }).name.trim();
-    }
+    const { data: subj } = await supabase.from("subjects").select("code, name").eq("id", subjectId).maybeSingle();
+    const rawCode = (subj as { code?: string } | null)?.code?.trim() ?? "";
+    const rawName = (subj as { name?: string } | null)?.name?.trim() ?? "";
+    if (rawCode) subjectCode = rawCode;
+    if (rawName) subjectName = rawName;
+    // fallback to name initials if no code (legacy)
+    if (!subjectCode && rawName) subjectCode = rawName;
   } catch {
     // fallback to subjectId
   }
-  const docName = getLiveDocName(subjectName, new Date());
+  if (!subjectCode) subjectCode = subjectName;
+  const docName = getLiveDocName(subjectCode, new Date());
   const expiry = getLiveNoteExpiry(new Date());
 
   // Drive create + permission (with orphan handling)

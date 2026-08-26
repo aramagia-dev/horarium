@@ -120,11 +120,12 @@ export function resetDriveClientForTests() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function getLiveDocName(subjectName: string, date: Date = new Date()): string {
+export function getLiveDocName(subjectCode: string, date: Date = new Date()): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
-  return `${subjectName} - ${y}-${m}-${d} - Apuntes en vivo`;
+  const code = (subjectCode ?? "").trim() || "HOR";
+  return `${code} - ${y}-${m}-${d}`;
 }
 
 export function getLiveNoteExpiry(from: Date = new Date(), durationHours: number = getLiveNoteDurationHours()): Date {

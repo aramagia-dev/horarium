@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, ExternalLink, FileText } from "lucide-react";
+import { Copy, ExternalLink, FileText, FolderOpen } from "lucide-react";
 import { motion } from "framer-motion";
 import { SubjectModal } from "@/components/subject-modal";
 import { notesChangedEvent, readLocalNotes } from "@/lib/notes-storage";
@@ -29,6 +29,7 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
   type LiveNoteCard = { id: string; subject_id: string; title: string; drive_web_view_link: string; drive_file_id: string; expires_at: string | null; created_at: string; is_active?: boolean };
   const [liveMap, setLiveMap] = useState<Record<string, LiveNoteCard | null>>({});
   const [liveCopiedId, setLiveCopiedId] = useState<string | null>(null);
+  const [driveRootUrl, setDriveRootUrl] = useState<string | null>(null);
   const subjectGroups = Array.from(new Map(schedule.map((entry) => [entry.code, entry])).values()).map((subject) => ({
     subject,
     entries: schedule.filter((entry) => entry.code === subject.code),
@@ -148,6 +149,39 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
     }
   }, []);
 
+  useEffect(() => {
+    if (!userId) {
+      setDriveRootUrl(null);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      let token: string | null = null;
+      try {
+        const { data } = await (supabase?.auth.getSession() ?? ({ data: { session: null } } as unknown as { data: { session: { access_token: string } | null } }));
+        token = (data as { session?: { access_token?: string } | null })?.session?.access_token ?? null;
+      } catch {
+        token = null;
+      }
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      try {
+        const res = await fetch("/api/drive/root", { cache: "no-store", headers: authHeaders });
+        if (!res.ok) {
+          if (active) setDriveRootUrl(null);
+          return;
+        }
+        const raw = (await res.json().catch(() => null)) as { url?: string } | null;
+        if (!active) return;
+        setDriveRootUrl(raw?.url ?? null);
+      } catch {
+        if (active) setDriveRootUrl(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
   const subjects = subjectGroups.map(({ subject, entries }) => ({
     subject,
     sections: Array.from(new Set(entries.map((entry) => entry.section))),
@@ -160,7 +194,20 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
   return <section aria-label="Notas" className="mx-auto w-full max-w-[1440px] min-w-0 max-w-full overflow-x-hidden">
     <div className="mb-7 flex w-full max-w-full min-w-0 flex-col gap-4 overflow-x-hidden lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0 max-w-full"><p className="text-xs font-bold tracking-[0.14em] text-[var(--accent)] uppercase">Espacio de estudio</p><h1 className="mt-1 break-words text-[28px] font-bold tracking-[-0.04em] text-[var(--ink)]">Notas elaboradas</h1><p className="mt-1 max-w-2xl break-words text-sm leading-6 text-[var(--muted)]">Organizá documentos con bloques, fechas, etiquetas y adjuntos. Las notas rápidas siguen disponibles desde Horario.</p></div>
-      <motion.label whileFocus={{ scale: 1.01 }} transition={{ duration: 0.15 }} className="block w-full min-w-0 max-w-full shrink-0 overflow-hidden lg:ml-auto lg:w-[360px] lg:max-w-[360px]"><span className="sr-only">Buscar materias</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por materia, código o sección..." aria-label="Buscar materias" className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15" /></motion.label>
+      <div className="flex w-full min-w-0 max-w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto lg:w-[460px] lg:max-w-[460px]">
+        <motion.label whileFocus={{ scale: 1.01 }} transition={{ duration: 0.15 }} className="block min-w-0 flex-1 overflow-hidden"><span className="sr-only">Buscar materias</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por materia, código o sección..." aria-label="Buscar materias" className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15" /></motion.label>
+        {driveRootUrl ? (
+          <a
+            href={driveRootUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Abrir Drive de Horarium en una pestaña nueva"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-sm transition hover:border-[var(--accent)] hover:bg-[var(--soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/30"
+          >
+            <FolderOpen size={16} aria-hidden="true" className="shrink-0 text-[var(--accent)]" /> Ver Drive <ExternalLink size={12} aria-hidden="true" className="shrink-0 opacity-60" />
+          </a>
+        ) : null}
+      </div>
     </div>
     {error ? <p role="alert" className="mb-5 max-w-full break-words rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-600">{error}</p> : null}
     {filteredSubjects.length === 0 ? <div className="max-w-full overflow-hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] px-6 py-12 text-center"><h2 className="break-words text-lg font-semibold text-[var(--ink)]">{subjects.length === 0 ? "No hay materias disponibles" : "No encontramos materias"}</h2><p className="mt-2 break-words text-sm text-[var(--muted)]">{subjects.length === 0 ? "El calendario todavía no tiene materias para seleccionar." : "Probá con otro término de búsqueda."}</p></div> : <div className="grid w-full max-w-full min-w-0 gap-6 overflow-x-hidden xl:grid-cols-[260px_minmax(0,1fr)]">

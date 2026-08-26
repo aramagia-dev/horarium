@@ -125,7 +125,7 @@ export function getLiveDocName(subjectCode: string, date: Date = new Date()): st
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   const code = (subjectCode ?? "").trim() || "HOR";
-  return `${code} - ${y}-${m}-${d}`;
+  return `${code} ${d}/${m}/${y}`;
 }
 
 export function getLiveNoteExpiry(from: Date = new Date(), durationHours: number = getLiveNoteDurationHours()): Date {

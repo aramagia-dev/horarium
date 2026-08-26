@@ -3,23 +3,23 @@ import { getLiveDocName, getLiveNoteExpiry, getLiveNoteDurationHours, resetDrive
 import { checkRateLimit, resetRateLimitForTests } from "@/lib/rate-limit";
 
 describe("getLiveDocName", () => {
-  it("formats as 'CODE - YYYY-MM-DD'", () => {
+  it("formats as 'CODE DD/MM/YYYY'", () => {
     const d = new Date(2026, 0, 15); // Jan 15 2026 local
-    expect(getLiveDocName("ASI", d)).toBe("ASI - 2026-01-15");
+    expect(getLiveDocName("ASI", d)).toBe("ASI 15/01/2026");
   });
   it("pads month/day", () => {
     const d = new Date(2026, 8, 5); // Sep 5
-    expect(getLiveDocName("RDS", d)).toBe("RDS - 2026-09-05");
+    expect(getLiveDocName("RDS", d)).toBe("RDS 05/09/2026");
   });
   it("uses today when no date passed", () => {
     const name = getLiveDocName("ASI");
-    expect(name).toMatch(/^ASI - \d{4}-\d{2}-\d{2}$/);
+    expect(name).toMatch(/^ASI \d{2}\/\d{2}\/\d{4}$/);
   });
   it("trims code and falls back to HOR when empty", () => {
     const d = new Date(2026, 0, 15);
-    expect(getLiveDocName("  ASI  ", d)).toBe("ASI - 2026-01-15");
-    expect(getLiveDocName("", d)).toBe("HOR - 2026-01-15");
-    expect(getLiveDocName("   ", d)).toBe("HOR - 2026-01-15");
+    expect(getLiveDocName("  ASI  ", d)).toBe("ASI 15/01/2026");
+    expect(getLiveDocName("", d)).toBe("HOR 15/01/2026");
+    expect(getLiveDocName("   ", d)).toBe("HOR 15/01/2026");
   });
 });
 

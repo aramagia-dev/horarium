@@ -60,6 +60,7 @@ describe("event-completion-board helpers — filter semantics & counters", () =>
   afterEach(() => vi.useRealTimers());
 
   it("default Pendientes hides own done (filter pendientes)", () => {
+    setNow("2026-08-20T10:00:00");
     const a = mkEvent({ id: "a", date: "2026-08-22", isCompletedByMe: false });
     const b = mkEvent({ id: "b", date: "2026-08-23", isCompletedByMe: true });
     const c = mkEvent({ id: "c", date: "2026-08-24", isCompletedByMe: false });
@@ -99,7 +100,7 @@ describe("event-completion-board helpers — filter semantics & counters", () =>
     ];
     const counts = getCompletionCounts(evs);
     expect(counts.todos).toBe(3);
-    expect(counts.pendientes).toBe(2);
+    expect(counts.pendientes).toBe(1);
     expect(counts.completados).toBe(1);
     expect(counts.vencidos).toBe(1);
   });

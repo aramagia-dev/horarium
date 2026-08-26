@@ -252,6 +252,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         ) : null}
       </motion.div>
       {sourceError ? <p role="status" className="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">No se pudo leer la tabla remota de eventos. Ejecutá la migración `supabase/academic-events.sql`; mientras tanto se muestra el modo local.</p> : null}
+      {error ? <p role="alert" className="mb-5 rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-200">{error}</p> : null}
       <AnimatePresence>
         {canCreate && editing ? (
           <motion.form
@@ -438,7 +439,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="mt-5 flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[var(--accent)]" />Evento académico</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-400" />Vencido</span>{error ? <span role="alert" className="text-rose-600">{error}</span> : null}</div>
+      <div className="mt-5 flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[var(--accent)]" />Evento académico</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-400" />Vencido</span></div>
 
       {/* Detail modal — PR2 3.4 */}
       <AnimatePresence>

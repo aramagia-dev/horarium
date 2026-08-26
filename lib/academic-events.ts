@@ -52,6 +52,17 @@ export const eventsChangedEvent = "horarium:events-changed";
 const storageKey = "horarium:academic-events";
 const completionStorageKey = "horarium:completion-completions";
 
+function mapCompletionError(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("does not exist") || lower.includes("could not find the table") || lower.includes("relation") && lower.includes("does not exist") || lower.includes("42p01")) {
+    return "Falta la migración de completados. Ejecutá supabase/event-completion-social.sql en Supabase SQL Editor y recargá la página.";
+  }
+  if (lower.includes("permission denied") || lower.includes("not allowed") || lower.includes("policy")) {
+    return "No tenés permiso para marcar este evento. Verificá que estés logueado.";
+  }
+  return message;
+}
+
 function localDate(offset: number) {
   const date = new Date();
   date.setHours(12, 0, 0, 0);
@@ -336,13 +347,13 @@ export async function toggleIndividualCompletion(eventId: string): Promise<{ err
   if (existing.error && existing.error.code !== "PGRST116") {
     // PGRST116 = no rows, treat as not found
     // For other errors, return
-    return { error: existing.error.message };
+    return { error: mapCompletionError(existing.error.message) };
   }
 
   if (existing.data) {
     // delete own row
     const del = await supabase.from("academic_event_completions").delete().eq("event_id", eventId).eq("user_id", userId);
-    if (del.error) return { error: del.error.message };
+    if (del.error) return { error: mapCompletionError(del.error.message) };
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     return { error: "" };
   } else {
@@ -356,7 +367,7 @@ export async function toggleIndividualCompletion(eventId: string): Promise<{ err
         triggerEventCompletedNotification(eventId);
         return { error: "" };
       }
-      return { error: ins.error.message };
+      return { error: mapCompletionError(ins.error.message) };
     }
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     triggerEventCompletedNotification(eventId);
@@ -392,14 +403,14 @@ export async function toggleGroupCompletion(eventId: string): Promise<{ error: s
   if (!userId) return { error: "No autenticado." };
 
   const existing = await supabase.from("academic_events").select("id, completed_by").eq("id", eventId).maybeSingle();
-  if (existing.error) return { error: existing.error.message };
+  if (existing.error) return { error: mapCompletionError(existing.error.message) };
   if (!existing.data) return { error: "Evento no encontrado." };
 
   const currentCompletedBy = (existing.data as { completed_by: string | null }).completed_by;
   if (currentCompletedBy) {
     // uncomplete for all
     const upd = await supabase.from("academic_events").update({ completed_by: null, completed_at: null }).eq("id", eventId);
-    if (upd.error) return { error: upd.error.message };
+    if (upd.error) return { error: mapCompletionError(upd.error.message) };
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     return { error: "" };
   } else {
@@ -412,7 +423,7 @@ export async function toggleGroupCompletion(eventId: string): Promise<{ error: s
         triggerEventCompletedNotification(eventId);
         return { error: "" };
       }
-      return { error: upd.error.message };
+      return { error: mapCompletionError(upd.error.message) };
     }
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     triggerEventCompletedNotification(eventId);

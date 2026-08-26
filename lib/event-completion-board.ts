@@ -9,7 +9,7 @@ export function filterEventsByCompletion(
   events: EnrichedEvent[],
   filter: CompletionFilter,
 ): EnrichedEvent[] {
-  if (filter === "pendientes") return events.filter((e) => !e.isCompletedByMe);
+  if (filter === "pendientes") return events.filter((e) => !e.isCompletedByMe && !isEventOverdue(e as AcademicEvent, e.isCompletedByMe));
   if (filter === "completados") return events.filter((e) => e.isCompletedByMe);
   if (filter === "vencidos") return events.filter((e) => isEventOverdue(e as AcademicEvent, e.isCompletedByMe));
   return [...events];
@@ -21,7 +21,7 @@ export function getCompletionCounts(events: EnrichedEvent[]): {
   todos: number;
   vencidos: number;
 } {
-  const pendientes = events.filter((e) => !e.isCompletedByMe).length;
+  const pendientes = events.filter((e) => !e.isCompletedByMe && !isEventOverdue(e as AcademicEvent, e.isCompletedByMe)).length;
   const completados = events.filter((e) => e.isCompletedByMe).length;
   const todos = events.length;
   const vencidos = events.filter((e) => isEventOverdue(e as AcademicEvent, e.isCompletedByMe)).length;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BookOpenCheck, CalendarDays, ClipboardCheck, Presentation, RotateCcw } from "lucide-react";
 import { addLocalDays, dayForDate, formatDateInput, formatDay, formatWeekHeading, formatWeekRange, getInitialDay, getWeekStart, isSameLocalDay, parseDateInput, startOfLocalDay } from "@/lib/calendar-utils";
@@ -37,6 +37,52 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
   function goToday() { const current = startOfLocalDay(new Date()); setWeekStart(getWeekStart(current)); setActiveDay(getInitialDay(current)); }
   function selectDate(value: string) { const date = parseDateInput(value); if (!date) return; setWeekStart(getWeekStart(date)); setActiveDay(dayForDate(date)); }
 
+  const [swipeDir, setSwipeDir] = useState(0);
+  function goNextDay() {
+    setSwipeDir(1);
+    const idx = days.indexOf(activeDay);
+    if (idx < days.length - 1) setActiveDay(days[idx + 1]);
+    else {
+      setWeekStart((cur) => addLocalDays(cur, 7));
+      setActiveDay(days[0]);
+    }
+  }
+  function goPrevDay() {
+    setSwipeDir(-1);
+    const idx = days.indexOf(activeDay);
+    if (idx > 0) setActiveDay(days[idx - 1]);
+    else {
+      setWeekStart((cur) => addLocalDays(cur, -7));
+      setActiveDay(days[days.length - 1]);
+    }
+  }
+  const touchRef = useRef<{ x: number; y: number } | null>(null);
+  function handleTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    if (!t) return;
+    touchRef.current = { x: t.clientX, y: t.clientY };
+  }
+  function handleTouchEnd(e: React.TouchEvent) {
+    const start = touchRef.current;
+    touchRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    if (dx < 0) goNextDay();
+    else goPrevDay();
+  }
+
+  const mobileSwipeVariants = reduced
+    ? { hidden: { opacity: 0 }, visible: { opacity: 1 }, exit: { opacity: 0 } }
+    : {
+        hidden: (dir: number) => ({ opacity: 0, x: dir === 0 ? 0 : dir > 0 ? 28 : -28 }),
+        visible: { opacity: 1, x: 0, transition: { duration: 0.22, ease: "easeOut" as const } },
+        exit: (dir: number) => ({ opacity: 0, x: dir === 0 ? 0 : dir > 0 ? -28 : 28, transition: { duration: 0.18, ease: "easeIn" as const } }),
+      };
+
   return (
     <section aria-label="Horario semanal" className="w-full max-w-none min-w-0 overflow-visible">
       <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="mb-6 flex w-full max-w-full min-w-0 flex-col justify-between gap-4 overflow-visible xl:flex-row xl:items-center">
@@ -63,12 +109,13 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
           </label>
         </div>
       </motion.div>
-      <motion.div
-        variants={withReducedMotion(staggerContainer, reduced)}
-        initial="hidden"
-        animate="visible"
-        className="mb-5 grid w-full max-w-full min-w-0 grid-cols-5 gap-2 overflow-visible py-1 lg:hidden"
-      >
+      <div className="lg:hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        <motion.div
+          variants={withReducedMotion(staggerContainer, reduced)}
+          initial="hidden"
+          animate="visible"
+          className="mb-5 grid w-full max-w-full min-w-0 grid-cols-5 gap-2 overflow-visible py-1"
+        >
         {days.map((day, index) => {
           const eventCount = events.filter((event) => event.date === formatDateInput(weekDates[index]) && event.status !== "cancelled").length;
           return (
@@ -78,7 +125,12 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
               variants={withReducedMotion(staggerItem, reduced)}
               whileHover={reduced ? undefined : { y: -1, scale: 1.01 }}
               whileTap={reduced ? undefined : { scale: 0.98 }}
-              onClick={() => setActiveDay(day)}
+              onClick={() => {
+                const curIdx = days.indexOf(activeDay);
+                const nextIdx = days.indexOf(day);
+                if (nextIdx !== curIdx) setSwipeDir(nextIdx > curIdx ? 1 : -1);
+                setActiveDay(day);
+              }}
               aria-label={`${formatDay(day)} ${weekDates[index].getDate()}${eventCount ? `, ${eventCount} ${eventCount === 1 ? "evento académico" : "eventos académicos"}` : ""}`}
               className={`w-full min-w-0 rounded-[18px] border px-2 py-2.5 text-center transition ${activeDay === day ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-transparent bg-[var(--secondary)] text-[var(--muted)]"}`}
             >
@@ -89,6 +141,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
           );
         })}
       </motion.div>
+      </div>
       <motion.div
         variants={withReducedMotion(pageVariants, reduced)}
         initial="initial"
@@ -135,14 +188,30 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
             </motion.div>
           </AnimatePresence>
         </div>
-        <div className="w-full max-w-full min-w-0 overflow-x-hidden lg:hidden">
-          <AnimatePresence mode="wait">
+        <div
+          className="w-full max-w-full min-w-0 overflow-x-hidden lg:hidden touch-pan-y"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <AnimatePresence mode="wait" custom={swipeDir}>
             <motion.div
               key={activeDay + formatDateInput(weekStart)}
-              variants={withReducedMotion(staggerContainer, reduced)}
+              custom={swipeDir}
+              variants={mobileSwipeVariants}
               initial="hidden"
               animate="visible"
-              exit="hidden"
+              exit="exit"
+              drag={reduced ? false : "x"}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.18}
+              dragMomentum={false}
+              onDragEnd={(_, info) => {
+                const { offset, velocity } = info;
+                if (Math.abs(offset.x) < 60) return;
+                if (Math.abs(velocity.y) > Math.abs(velocity.x) * 1.2) return;
+                if (offset.x < 0) goNextDay();
+                else goPrevDay();
+              }}
               className="w-full max-w-full min-w-0 space-y-3 overflow-x-hidden p-4"
             >
               {schedule

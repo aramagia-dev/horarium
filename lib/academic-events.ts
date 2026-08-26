@@ -52,15 +52,18 @@ export const eventsChangedEvent = "horarium:events-changed";
 const storageKey = "horarium:academic-events";
 const completionStorageKey = "horarium:completion-completions";
 
-function mapCompletionError(message: string): string {
-  const lower = message.toLowerCase();
-  if (lower.includes("does not exist") || lower.includes("could not find the table") || lower.includes("relation") && lower.includes("does not exist") || lower.includes("42p01")) {
+function mapCompletionError(err: unknown): string {
+  const raw = typeof err === "string" ? err : ((err as { message?: string })?.message ?? String(err));
+  const code = typeof err === "object" && err !== null ? ((err as { code?: string }).code ?? "") : "";
+  const lower = `${raw} ${code}`.toLowerCase();
+  // table missing or schema cache
+  if (lower.includes("does not exist") || lower.includes("could not find the table") || lower.includes("42p01") || lower.includes("pgrst205")) {
     return "Falta la migración de completados. Ejecutá supabase/event-completion-social.sql en Supabase SQL Editor y recargá la página.";
   }
-  if (lower.includes("permission denied") || lower.includes("not allowed") || lower.includes("policy")) {
-    return "No tenés permiso para marcar este evento. Verificá que estés logueado.";
+  if (lower.includes("permission denied") || lower.includes("not allowed") || lower.includes("policy") || lower.includes("row-level security") || lower.includes("42501")) {
+    return "No tenés permiso para marcar este evento. Verificá que estés logueado y que la migración de RLS esté aplicada.";
   }
-  return message;
+  return raw;
 }
 
 function localDate(offset: number) {
@@ -116,18 +119,22 @@ function writeLocalCompletions(rows: Array<{ event_id: string; user_id: string; 
   window.dispatchEvent(new CustomEvent(eventsChangedEvent));
 }
 
-function toEnriched(event: AcademicEvent, viewerId: string | null, completions: Array<{ event_id: string; user_id: string; completed_at: string | null; profiles?: { display_name: string | null; avatar_url: string | null } | null }>): EnrichedEvent {
+function toEnriched(
+  event: AcademicEvent,
+  viewerId: string | null,
+  completions: Array<{ event_id: string; user_id: string; completed_at: string | null; profiles?: { display_name: string | null; avatar_url: string | null } | null }>,
+  grupalProfiles?: Map<string, { display_name: string | null; avatar_url: string | null }>,
+): EnrichedEvent {
   const eventType: EventType = (event.event_type as EventType) ?? "individual";
   const completedBy = event.completed_by ?? null;
   const completedAt = event.completed_at ?? null;
 
   if (eventType === "grupal") {
     const isCompletedByMe = completedBy !== null;
-    // For grupal, completers is single entry representing who completed for all, if any
+    const prof = completedBy ? grupalProfiles?.get(completedBy) : undefined;
     const completers: Completer[] = completedBy
-      ? [{ user_id: completedBy, display_name: null, avatar_url: null, completed_at: completedAt }]
+      ? [{ user_id: completedBy, display_name: prof?.display_name ?? null, avatar_url: prof?.avatar_url ?? null, completed_at: completedAt }]
       : [];
-    // Try to enrich display_name/avatar from completions joining? For grupal, completers come from event row, not join
     return {
       ...event,
       event_type: eventType,
@@ -237,20 +244,41 @@ export async function loadAcademicEvents(): Promise<{ events: EnrichedEvent[]; s
     };
   });
 
-  // Fetch completions for enrichment (individual mode)
+  // Fetch completions for enrichment (individual mode) — two-step to avoid missing FK to profiles
   let completions: Array<{ event_id: string; user_id: string; completed_at: string | null; profiles?: { display_name: string | null; avatar_url: string | null } | null }> = [];
+  const grupalProfileMap = new Map<string, { display_name: string | null; avatar_url: string | null }>();
   if (events.length > 0) {
     const ids = events.map((e) => e.id);
-    const compRes = await supabase
-      .from("academic_event_completions")
-      .select("event_id, user_id, completed_at, profiles(display_name,avatar_url)")
-      .in("event_id", ids);
+    const compRes = await supabase.from("academic_event_completions").select("event_id, user_id, completed_at").in("event_id", ids);
     if (!compRes.error && compRes.data) {
       completions = compRes.data as unknown as typeof completions;
+    } else if (compRes.error) {
+      console.warn("[horarium] completions fetch failed", compRes.error);
+    }
+    // collect user_ids for profile enrichment (individual completers + grupal completed_by)
+    const userIds = new Set<string>();
+    for (const c of completions) if (c.user_id) userIds.add(c.user_id);
+    for (const e of events) if (e.event_type === "grupal" && e.completed_by) userIds.add(e.completed_by);
+    if (userIds.size > 0) {
+      try {
+        const profRes = await supabase.from("profiles").select("id, display_name, avatar_url").in("id", Array.from(userIds));
+        if (!profRes.error && profRes.data) {
+          for (const p of profRes.data as Array<{ id: string; display_name: string | null; avatar_url: string | null }>) {
+            grupalProfileMap.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+          }
+          // enrich individual completions in-place
+          completions = completions.map((c) => {
+            const prof = grupalProfileMap.get(c.user_id);
+            return prof ? { ...c, profiles: prof } : c;
+          });
+        }
+      } catch (e) {
+        console.warn("[horarium] profile enrichment failed", e);
+      }
     }
   }
 
-  const enriched = events.map((e) => toEnriched(e, viewerId, completions));
+  const enriched = events.map((e) => toEnriched(e, viewerId, completions, grupalProfileMap));
   return { events: enriched, source: "supabase", error: "" };
 }
 
@@ -347,13 +375,13 @@ export async function toggleIndividualCompletion(eventId: string): Promise<{ err
   if (existing.error && existing.error.code !== "PGRST116") {
     // PGRST116 = no rows, treat as not found
     // For other errors, return
-    return { error: mapCompletionError(existing.error.message) };
+    return { error: mapCompletionError(existing.error) };
   }
 
   if (existing.data) {
     // delete own row
     const del = await supabase.from("academic_event_completions").delete().eq("event_id", eventId).eq("user_id", userId);
-    if (del.error) return { error: mapCompletionError(del.error.message) };
+    if (del.error) return { error: mapCompletionError(del.error) };
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     return { error: "" };
   } else {
@@ -367,7 +395,7 @@ export async function toggleIndividualCompletion(eventId: string): Promise<{ err
         triggerEventCompletedNotification(eventId);
         return { error: "" };
       }
-      return { error: mapCompletionError(ins.error.message) };
+      return { error: mapCompletionError(ins.error) };
     }
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     triggerEventCompletedNotification(eventId);
@@ -403,14 +431,14 @@ export async function toggleGroupCompletion(eventId: string): Promise<{ error: s
   if (!userId) return { error: "No autenticado." };
 
   const existing = await supabase.from("academic_events").select("id, completed_by").eq("id", eventId).maybeSingle();
-  if (existing.error) return { error: mapCompletionError(existing.error.message) };
+  if (existing.error) return { error: mapCompletionError(existing.error) };
   if (!existing.data) return { error: "Evento no encontrado." };
 
   const currentCompletedBy = (existing.data as { completed_by: string | null }).completed_by;
   if (currentCompletedBy) {
     // uncomplete for all
     const upd = await supabase.from("academic_events").update({ completed_by: null, completed_at: null }).eq("id", eventId);
-    if (upd.error) return { error: mapCompletionError(upd.error.message) };
+    if (upd.error) return { error: mapCompletionError(upd.error) };
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     return { error: "" };
   } else {
@@ -423,7 +451,7 @@ export async function toggleGroupCompletion(eventId: string): Promise<{ error: s
         triggerEventCompletedNotification(eventId);
         return { error: "" };
       }
-      return { error: mapCompletionError(upd.error.message) };
+      return { error: mapCompletionError(upd.error) };
     }
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
     triggerEventCompletedNotification(eventId);

@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useSchedule } from "@/lib/schedule-context";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import {
+  clearAllNotifications,
   fetchNotifications,
   formatNotificationTime,
   getDueEvents,
@@ -119,6 +120,23 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
       window.dispatchEvent(new CustomEvent("notifications-updated"));
     } catch (e) {
       console.warn("[horarium] markAllRead failed", e);
+    }
+  };
+
+  const [clearing, setClearing] = useState(false);
+  const handleClearAll = async () => {
+    if (!userId || notifications.length === 0 || clearing) return;
+    setClearing(true);
+    const prev = notifications;
+    setNotifications([]);
+    try {
+      await clearAllNotifications(userId);
+      window.dispatchEvent(new CustomEvent("notifications-updated"));
+    } catch (e) {
+      console.warn("[horarium] clearAllNotifications failed", e);
+      setNotifications(prev);
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -251,11 +269,23 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
         >
           <div className="sticky top-0 flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-4 py-3">
             <h2 className="text-sm font-semibold text-[var(--ink)]">Notificaciones</h2>
-            {unreadCount > 0 ? (
-              <button type="button" onClick={() => void handleMarkAll()} className="text-xs font-semibold text-[var(--accent)] hover:underline">
-                Marcar todas como leídas
-              </button>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {unreadCount > 0 ? (
+                <button type="button" onClick={() => void handleMarkAll()} className="text-xs font-semibold text-[var(--accent)] hover:underline">
+                  Marcar leídas
+                </button>
+              ) : null}
+              {notifications.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void handleClearAll()}
+                  disabled={clearing}
+                  className="text-xs font-semibold text-rose-500 hover:text-rose-600 hover:underline disabled:opacity-40"
+                >
+                  {clearing ? "Limpiando…" : "Limpiar"}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {/* Por vencer */}

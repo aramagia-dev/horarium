@@ -77,6 +77,12 @@ export async function markAllRead(userId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function clearAllNotifications(userId: string): Promise<void> {
+  if (!supabase || !userId) return;
+  const { error } = await supabase.from("notifications").delete().eq("user_id", userId);
+  if (error) throw error;
+}
+
 // --- event_due derived -------------------------------------------------
 
 function toLocalISODate(d: Date): string {

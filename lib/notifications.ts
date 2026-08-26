@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { AcademicEvent } from "@/lib/academic-events";
 
-export type NotificationType = "new_comment" | "mention" | "new_event" | "live_note";
+export type NotificationType = "new_comment" | "mention" | "new_event" | "live_note" | "event_completed";
 
 export type Notification = {
   id: string;
@@ -104,4 +104,28 @@ export function formatNotificationTime(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+// --- event_completed grouped helpers -------------------------------------
+
+export function formatEventCompletedBody(firstName: string, otherCount: number, eventTitle: string): string {
+  const name = firstName?.trim() || "Alguien";
+  const title = eventTitle?.trim() || "evento";
+  if (otherCount <= 0) return `${name} completó ${title}`;
+  if (otherCount === 1) return `${name} y 1 más completaron ${title}`;
+  return `${name} y ${otherCount} más completaron ${title}`;
+}
+
+export function getEventCompletedTitle(): string {
+  return "Evento completado";
+}
+
+export function buildEventCompletedBodyFromCompleters(
+  completers: Array<{ display_name: string | null; user_id: string }>,
+  eventTitle: string,
+): string {
+  if (completers.length === 0) return formatEventCompletedBody("Alguien", 0, eventTitle);
+  const first = completers[0]?.display_name?.trim() || "Alguien";
+  const otherCount = Math.max(0, completers.length - 1);
+  return formatEventCompletedBody(first, otherCount, eventTitle);
 }

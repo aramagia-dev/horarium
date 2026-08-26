@@ -33,7 +33,7 @@ import {
   sortForTodos,
 } from "@/lib/event-completion-board";
 
-const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", recuperatorio: "Recuperatorio", exposición: "Exposición", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
+const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", tarea: "Tarea", recuperatorio: "Recuperatorio", exposición: "Exposición", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
 const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, description: "", status: "pending", event_type: "individual" };
 
 type CompletionFilter = "pendientes" | "completados" | "todos" | "vencidos";
@@ -91,11 +91,16 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     } catch {}
   }, [completionFilter]);
 
-  // notification bell requests Todos to highlight completed event (event_completed grouped)
+  // notification bell requests filter switch so target event is visible
   useEffect(() => {
     const onShowTodos = () => setCompletionFilter("todos");
+    const onShowPendientes = () => setCompletionFilter("pendientes");
     window.addEventListener("horarium:events-show-todos", onShowTodos as EventListener);
-    return () => window.removeEventListener("horarium:events-show-todos", onShowTodos as EventListener);
+    window.addEventListener("horarium:events-show-pendientes", onShowPendientes as EventListener);
+    return () => {
+      window.removeEventListener("horarium:events-show-todos", onShowTodos as EventListener);
+      window.removeEventListener("horarium:events-show-pendientes", onShowPendientes as EventListener);
+    };
   }, []);
 
   useEffect(() => {

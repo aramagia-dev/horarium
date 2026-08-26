@@ -1,6 +1,6 @@
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 
-export const eventTypes = ["parcial", "entrega", "recuperatorio", "exposición", "otro"] as const;
+export const eventTypes = ["parcial", "entrega", "tarea", "recuperatorio", "exposición", "otro"] as const;
 export const eventStatuses = ["pending", "completed", "cancelled"] as const;
 export type AcademicEventType = (typeof eventTypes)[number];
 export type AcademicEventStatus = (typeof eventStatuses)[number];

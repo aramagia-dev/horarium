@@ -25,7 +25,7 @@ type Props = {
 
 export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView }: Props) {
   const { userId } = useAuth();
-  const { publicData } = useSchedule();
+  const { publicData, refresh: refreshSchedule } = useSchedule();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -141,6 +141,15 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
         // ignore
       }
     }
+    // new_event: force Pendientes filter so new pending event is visible (todos would hide pending priority)
+    if (n.type === "new_event" && n.event_id) {
+      try {
+        window.localStorage.setItem("horarium:events-completion-filter", "pendientes");
+        window.dispatchEvent(new CustomEvent("horarium:events-show-pendientes"));
+      } catch {
+        // ignore
+      }
+    }
     // live_note: open external Drive link in new tab (body is webViewLink), not Horarium nav
     if (n.type === "live_note") {
       const url = n.body?.trim();
@@ -165,6 +174,12 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
       return;
     }
     if (n.event_id) {
+      try {
+        refreshSchedule();
+      } catch {
+        // ignore
+      }
+      window.dispatchEvent(new CustomEvent("horarium:events-changed"));
       if (onSelectEvent) onSelectEvent(n.event_id);
       else if (onNavigateView) onNavigateView("events");
       else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events", eventId: n.event_id } }));
@@ -187,6 +202,10 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
 
   const handleDueClick = (eventId: string) => {
     setOpen(false);
+    try {
+      refreshSchedule();
+    } catch {}
+    window.dispatchEvent(new CustomEvent("horarium:events-changed"));
     if (onSelectEvent) onSelectEvent(eventId);
     else if (onNavigateView) onNavigateView("events");
     else window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events", eventId } }));

@@ -240,7 +240,7 @@ function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], on
   );
 }
 
-const eventVisuals: Record<AcademicEventType, { label: string; icon: typeof CalendarDays; color: string }> = { parcial: { label: "Parcial", icon: ClipboardCheck, color: "text-rose-500" }, entrega: { label: "Entrega", icon: BookOpenCheck, color: "text-sky-500" }, recuperatorio: { label: "Recuperatorio", icon: RotateCcw, color: "text-amber-500" }, exposición: { label: "Exposición", icon: Presentation, color: "text-violet-500" }, otro: { label: "Otro", icon: CalendarDays, color: "text-[var(--accent)]" } };
+const eventVisuals: Record<AcademicEventType, { label: string; icon: typeof CalendarDays; color: string }> = { parcial: { label: "Parcial", icon: ClipboardCheck, color: "text-rose-500" }, entrega: { label: "Entrega", icon: BookOpenCheck, color: "text-sky-500" }, tarea: { label: "Tarea", icon: BookOpenCheck, color: "text-emerald-500" }, recuperatorio: { label: "Recuperatorio", icon: RotateCcw, color: "text-amber-500" }, exposición: { label: "Exposición", icon: Presentation, color: "text-violet-500" }, otro: { label: "Otro", icon: CalendarDays, color: "text-[var(--accent)]" } };
 function EventPreview({ events, onSelect, compact = false }: { events: AcademicEvent[]; onSelect: (event: AcademicEvent) => void; compact?: boolean }) {
   return (
     <div className={compact ? "mt-1 space-y-1" : "mt-3 space-y-1.5"}>

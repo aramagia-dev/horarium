@@ -71,7 +71,10 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
   }, [focus, schedule, selectedCode]);
 
   const fetchLiveForSubjects = useCallback(async (subjectIds: string[]) => {
-    if (!LIVE_NOTES_ENABLED || subjectIds.length === 0) return;
+    if (!LIVE_NOTES_ENABLED || !userId || subjectIds.length === 0) {
+      if (!userId) setLiveMap({});
+      return;
+    }
     let token: string | null = null;
     try {
       const { data } = await (supabase?.auth.getSession() ?? { data: { session: null } } as unknown as { data: { session: { access_token: string } | null } });
@@ -114,7 +117,7 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
       for (const [sid, card] of entries) next[sid] = card;
       return next;
     });
-  }, [LIVE_NOTES_ENABLED]);
+  }, [LIVE_NOTES_ENABLED, userId]);
 
   useEffect(() => {
     const ids = Array.from(new Set(schedule.map((e) => e.subjectId)));

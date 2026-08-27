@@ -10,7 +10,7 @@ import { notesChangedEvent, readLocalNotes } from "@/lib/notes-storage";
 import type { ScheduleEntry } from "@/lib/schedule-data";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { cardHover, hoverTransition, staggerContainer, staggerItem, useReducedMotion } from "@/lib/motion";
+import { cardHover, hoverTransition, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 
 type NotesFocus = { subjectId: string | null; noteId: string | null; commentId: string | null } | null;
 
@@ -219,7 +219,7 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
         <motion.nav
           aria-label="Materias con notas"
           className="mt-2 flex gap-2 overflow-x-auto overflow-y-hidden pb-2 xl:mt-0 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0 w-full max-w-full min-w-0"
-          variants={reduced ? undefined : staggerContainer}
+          variants={withReducedMotion(staggerContainer, reduced)}
           initial="hidden"
           animate="visible"
         >
@@ -228,8 +228,8 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
               key={subject.code}
               type="button"
               onClick={() => setSelectedCode(subject.code)}
-              variants={reduced ? undefined : staggerItem}
-              whileHover={reduced ? undefined : cardHover}
+              variants={withReducedMotion(staggerItem, reduced)}
+              whileHover={reduced ? { boxShadow: cardHover.boxShadow } : cardHover}
               whileTap={reduced ? undefined : { scale: 0.99 }}
               transition={hoverTransition}
               className={`notes-subject-card flex w-[260px] max-w-[72vw] shrink-0 items-center justify-between rounded-xl border p-4 text-left xl:w-full xl:max-w-none xl:shrink ${selectedCode === subject.code ? "border-[var(--accent)] bg-[var(--sidebar-accent)]" : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--accent)]"}`}

@@ -115,15 +115,13 @@ export const subtleCardHover = {
 
 export const hoverTransition: Transition = { duration: 0.2, ease: "easeOut" };
 
-// Return no-op variants when reduced motion is preferred (opacity only)
+// Keep a short opacity transition when reduced motion is preferred.
 export function withReducedMotion(variants: Variants, reduced: boolean | null): Variants {
   if (!reduced) return variants;
   const out: Variants = {};
   for (const key of Object.keys(variants)) {
-    const v = variants[key] as { transition?: unknown };
-    out[key] = { opacity: key === "hidden" ? 0 : 1, transition: { duration: 0 } };
-    // keep only opacity; strip transforms
-    void v;
+    const hidden = key === "hidden" || key === "initial" || key === "exit";
+    out[key] = { opacity: hidden ? 0 : 1, transition: fastTransition };
   }
   return out;
 }

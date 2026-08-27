@@ -1,9 +1,27 @@
 "use client";
 
-import { useReducedMotion } from "framer-motion";
+import { useSyncExternalStore } from "react";
 import type { Transition, Variants } from "framer-motion";
 
-export { useReducedMotion };
+const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
+
+function subscribeToReducedMotion(onStoreChange: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
+  const mediaQuery = window.matchMedia(reducedMotionQuery);
+  mediaQuery.addEventListener("change", onStoreChange);
+  return () => mediaQuery.removeEventListener("change", onStoreChange);
+}
+
+function getReducedMotionSnapshot() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(reducedMotionQuery).matches;
+}
+
+// Keep SSR and hydration identical; the browser preference updates afterward.
+function getServerReducedMotionSnapshot() { return false; }
+
+export function useReducedMotion() {
+  return useSyncExternalStore(subscribeToReducedMotion, getReducedMotionSnapshot, getServerReducedMotionSnapshot);
+}
 
 // ── Transitions ──
 export const easeTransition: Transition = { duration: 0.22, ease: "easeOut" };

@@ -61,7 +61,7 @@ function Avatar({ name, url, size = 28 }: { name: string | null; url: string | n
   );
 }
 
-export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, sourceError, selectedEventId, onDataChanged }: { events: AcademicEvent[]; subjects: Subject[]; isAdmin: boolean; userId: string | null; sourceError: string; selectedEventId?: string | null; onDataChanged?: () => void }) {
+export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, sourceError, selectedEventId, onDataChanged, onClearSelectedEvent }: { events: AcademicEvent[]; subjects: Subject[]; isAdmin: boolean; userId: string | null; sourceError: string; selectedEventId?: string | null; onDataChanged?: () => void; onClearSelectedEvent?: () => void }) {
   const [events, setEvents] = useState<EnrichedEvent[]>(() => initialEvents as unknown as EnrichedEvent[]);
   const [form, setForm] = useState<AcademicEventInput>(emptyForm);
   const [editing, setEditing] = useState(false);
@@ -371,6 +371,8 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                   variants={withReducedMotion(staggerItem, reduced)}
                   whileHover={reduced ? undefined : subtleCardHover}
                   transition={hoverTransition}
+                  onMouseEnter={selectedEventId && event.id !== selectedEventId ? () => onClearSelectedEvent?.() : undefined}
+                  onFocus={selectedEventId && event.id !== selectedEventId ? () => onClearSelectedEvent?.() : undefined}
                   className={`event-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border bg-[var(--surface)] p-4 sm:p-5 ${event.id === selectedEventId ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30" : isOverdue ? "border-rose-400/60" : "border-[var(--line)]"} ${cardExtra}`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">

@@ -144,11 +144,14 @@ export function SubjectModal({
       date: validDate,
       time: validTime,
     };
+    try {
+      sessionStorage.setItem("horarium:pending-create-event", JSON.stringify(detail));
+    } catch {}
     onClose();
     window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events" } }));
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent("horarium:create-event", { detail }));
-    }, 70);
+    }, 400);
   }
 
   useEffect(() => {

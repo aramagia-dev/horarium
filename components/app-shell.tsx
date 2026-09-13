@@ -106,11 +106,38 @@ export default function AppShell() {
 
   // Fallback: ensure horarium:create-event also navigates to Eventos even if subject-modal didn't dispatch navigate (race safety)
   useEffect(() => {
-    const handler = () => {
-      if (view !== "events") navigate("events");
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as unknown;
+      if (view !== "events") {
+        try {
+          if (detail) sessionStorage.setItem("horarium:pending-create-event", JSON.stringify(detail));
+        } catch {}
+        navigate("events");
+      }
     };
     window.addEventListener("horarium:create-event", handler as EventListener);
     return () => window.removeEventListener("horarium:create-event", handler as EventListener);
+  }, [view]);
+
+  // Re-dispatch pending create-event once EventsBoard is mounted (eliminates AnimatePresence race)
+  useEffect(() => {
+    if (view !== "events") return;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem("horarium:pending-create-event");
+    } catch {}
+    if (!raw) return;
+    let detail: unknown = null;
+    try {
+      detail = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    // Delay to ensure EventsBoard listener is attached after AnimatePresence transition
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("horarium:create-event", { detail }));
+    }, 100);
+    return () => window.clearTimeout(timer);
   }, [view]);
 
   return <main className="min-h-screen max-w-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">

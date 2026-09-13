@@ -116,10 +116,9 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     return () => { active = false; window.removeEventListener("horarium:events-changed", refresh); };
   }, []);
 
-  // Crear evento desde calendario — prefill via horarium:create-event
+  // Crear evento desde calendario — prefill via horarium:create-event + sessionStorage fallback (race-safe)
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { subjectId?: string | null; subjectName?: string; subjectCode?: string | null; date?: string; time?: string } | undefined;
+    const applyDetail = (detail: { subjectId?: string | null; subjectName?: string; subjectCode?: string | null; date?: string; time?: string } | undefined) => {
       if (!detail) return;
       const rawDate = typeof detail.date === "string" ? detail.date.trim() : "";
       const rawTime = typeof detail.time === "string" ? detail.time.trim() : "";
@@ -155,6 +154,26 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         window.requestAnimationFrame(() => titleInputRef.current?.focus());
       });
     };
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { subjectId?: string | null; subjectName?: string; subjectCode?: string | null; date?: string; time?: string } | undefined;
+      applyDetail(detail);
+      // Clear pending fallback if handler succeeds (idempotent, keeps storage clean)
+      try {
+        sessionStorage.removeItem("horarium:pending-create-event");
+      } catch {}
+    };
+
+    // Fallback: if navigation happened before listener mounted, consume sessionStorage on mount
+    try {
+      const raw = sessionStorage.getItem("horarium:pending-create-event");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { subjectId?: string | null; subjectName?: string; subjectCode?: string | null; date?: string; time?: string };
+        applyDetail(parsed);
+        sessionStorage.removeItem("horarium:pending-create-event");
+      }
+    } catch {}
+
     window.addEventListener("horarium:create-event", handler as EventListener);
     return () => window.removeEventListener("horarium:create-event", handler as EventListener);
   }, [subjects]);

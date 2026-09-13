@@ -265,11 +265,11 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
           animate="visible"
           exit="exit"
           style={{ originX: 1, originY: 0 }}
-          className="absolute right-0 top-11 z-50 max-h-[min(70vh,480px)] w-[min(92vw,360px)] overflow-auto rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl"
+          className="fixed inset-x-2 top-20 z-50 mx-auto max-h-[min(70vh,480px)] w-auto max-w-[360px] overflow-auto rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl md:absolute md:inset-x-auto md:right-0 md:top-11 md:mx-0 md:w-[min(92vw,360px)]"
         >
-          <div className="sticky top-0 flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+          <div className="sticky top-0 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--line)] bg-[var(--surface)] px-4 py-3">
             <h2 className="text-sm font-semibold text-[var(--ink)]">Notificaciones</h2>
-            <div className="flex items-center gap-3">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
               {unreadCount > 0 ? (
                 <button type="button" onClick={() => void handleMarkAll()} className="text-xs font-semibold text-[var(--accent)] hover:underline">
                   Marcar leídas

@@ -5,11 +5,13 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AlignLeft, CalendarDays, ChevronDown, FileText, Heading2, List, ListChecks, Loader2, Plus, UserRound, Users } from "lucide-react";
+import { AlignLeft, CalendarDays, CalendarPlus, ChevronDown, FileText, Heading2, List, ListChecks, Loader2, Plus, UserRound, Users } from "lucide-react";
 import {
   addLocalDays,
   formatClassDate,
+  formatDateInput,
   getWeekStart,
+  parseDateInput,
 } from "@/lib/calendar-utils";
 import {
   normalizeTags,
@@ -51,6 +53,9 @@ export function SubjectModal({
   onOpenNotes,
   highlightNoteId = null,
   highlightCommentId = null,
+  prefillDate,
+  prefillTime,
+  subjectIdForEvent,
 }: {
   subject: ScheduleEntry;
   sessions: ScheduleSession[];
@@ -61,6 +66,9 @@ export function SubjectModal({
   onOpenNotes?: () => void;
   highlightNoteId?: string | null;
   highlightCommentId?: string | null;
+  prefillDate?: string;
+  prefillTime?: string;
+  subjectIdForEvent?: string;
 }) {
   const [notes, setNotes] = useState<LocalNote[]>([]);
   const [draft, setDraft] = useState({
@@ -115,6 +123,33 @@ export function SubjectModal({
     );
 
   const isFormVisible = showForm || editingId !== null;
+
+  // Prefill helpers for "Crear evento desde calendario" — derive YYYY-MM-DD and HH:mm from calendar cell
+  const effectivePrefillDate = prefillDate ?? (date ? formatDateInput(date) : undefined);
+  const effectivePrefillTimeRaw = prefillTime ?? subject.start.slice(0, 5);
+  function handleCreateEventFromSchedule() {
+    const rawDate = effectivePrefillDate?.trim() ?? "";
+    const rawTime = effectivePrefillTimeRaw?.trim() ?? "";
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && parseDateInput(rawDate) ? rawDate : undefined;
+    const validTime = /^\d{2}:\d{2}$/.test(rawTime)
+      ? (() => {
+          const [h, m] = rawTime.split(":").map(Number);
+          return h >= 0 && h <= 23 && m >= 0 && m <= 59 ? rawTime : undefined;
+        })()
+      : undefined;
+    const detail = {
+      subjectId: subjectIdForEvent ?? subject.subjectId,
+      subjectName: subject.subject,
+      subjectCode: subject.code,
+      date: validDate,
+      time: validTime,
+    };
+    onClose();
+    window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events" } }));
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("horarium:create-event", { detail }));
+    }, 70);
+  }
 
   useEffect(() => {
     if (!openBlockMenuId) return;
@@ -266,13 +301,25 @@ export function SubjectModal({
       setLiveLoading(false);
       return;
     }
+    const formatDriveError = (d: { error?: string; hint?: string; details?: string }) =>
+      [d.error, d.hint, d.details ? `Detalle: ${d.details}` : null].filter(Boolean).join(" ");
     try {
       const res = await fetch("/api/drive/live-note", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({ subjectId: subject.subjectId }),
       });
-      const data = (await res.json().catch(() => ({}))) as { id?: string; url?: string; existing?: boolean; code?: string; error?: string; retryable?: boolean; retryAfter?: number };
+      const data = (await res.json().catch(() => ({}))) as {
+        id?: string;
+        url?: string;
+        existing?: boolean;
+        code?: string;
+        error?: string;
+        hint?: string;
+        details?: string;
+        retryable?: boolean;
+        retryAfter?: number;
+      };
       if (res.status === 201 && data.url) {
         openLiveUrl(data.url);
         return;
@@ -284,31 +331,83 @@ export function SubjectModal({
         setMessage("Ya existe un apunte en vivo para esta materia. Se abrió el documento vigente.");
         return;
       }
+      // Structured Drive errors — show hint+details via formatDriveError, preserve existing CTAs
+      if (data.code === "OAUTH_EXPIRED" || (res.status === 401 && data.code === "OAUTH_EXPIRED")) {
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || "Token de Drive expirado o revocado. Reautorizá en /api/auth/google.");
+        setLiveRetryable(false);
+        return;
+      }
       if (res.status === 401) {
-        setLiveError("Sesión expirada. Iniciá sesión de nuevo.");
+        // Fallback: Supabase 401 vs Drive OAUTH — if no code, treat as session expired
+        if (data.code) {
+          setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || data.error || "No autorizado.");
+          setLiveRetryable(Boolean(data.retryable));
+        } else {
+          setLiveError("Sesión expirada. Iniciá sesión de nuevo.");
+        }
+        return;
+      }
+      if (data.code === "FOLDER_NOT_FOUND" || (res.status === 422 && data.code === "FOLDER_NOT_FOUND")) {
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || "Carpeta de Drive no encontrada.");
+        setLiveRetryable(false);
         return;
       }
       if (res.status === 422 && data.code === "FOLDER_NOT_CONFIGURED") {
-        setLiveError("Carpeta no configurada para esta materia. Contactá al administrador.");
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || "Carpeta no configurada para esta materia. Contactá al administrador.");
+        setLiveRetryable(false);
+        return;
+      }
+      if (data.code === "DRIVE_NOT_CONFIGURED" || data.code === "OAUTH_CONFIG_ERROR") {
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || data.error || "Drive no configurado.");
+        setLiveRetryable(false);
+        return;
+      }
+      if (data.code === "FOLDER_RESOLVE_ERROR") {
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || "No se pudo resolver la carpeta de la materia.");
+        setLiveRetryable(false);
+        return;
+      }
+      if (data.code === "DRIVE_PERMISSION_DENIED") {
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || "Drive denegó el permiso.");
+        setLiveRetryable(Boolean(data.retryable));
+        return;
+      }
+      if (data.code === "DRIVE_UNAVAILABLE") {
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || "Drive no disponible.");
+        setLiveRetryable(true);
+        return;
+      }
+      if (data.code === "RATE_LIMITED" || res.status === 429) {
+        const after = typeof data.retryAfter === "number" ? ` Reintentá en ${data.retryAfter}s.` : "";
+        const base = (data.error ? formatDriveError(data as { error?: string; hint?: string; details?: string }) : null) ?? "Límite alcanzado. Demasiadas solicitudes.";
+        setLiveError(base + after);
+        setLiveRetryable(true);
+        return;
+      }
+      if (data.code === "DRIVE_ERROR") {
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || "Error de Drive.");
+        setLiveRetryable(Boolean(data.retryable));
         return;
       }
       if (res.status === 507 || data.code === "QUOTA_EXCEEDED") {
-        setLiveError(data.error ?? "Cuota de Drive del Service Account excedida. Creá un Shared Drive y compartilo con el SA como Manager.");
+        setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || data.error || "Cuota de Drive del Service Account excedida. Creá un Shared Drive y compartilo con el SA como Manager.");
         setLiveRetryable(false);
         return;
       }
       if (res.status === 429 || data.retryable) {
         const after = typeof data.retryAfter === "number" ? ` Reintentá en ${data.retryAfter}s.` : "";
-        setLiveError((data.error ?? "Límite alcanzado. Demasiadas solicitudes.") + after);
+        const base = data.error ? formatDriveError(data as { error?: string; hint?: string; details?: string }) : "Límite alcanzado. Demasiadas solicitudes.";
+        setLiveError(base + after);
         setLiveRetryable(true);
         return;
       }
       if (res.status === 502 || data.retryable) {
-        setLiveError(data.error ?? "Drive no disponible. Reintentá en unos segundos.");
+        const base = data.error ? formatDriveError(data as { error?: string; hint?: string; details?: string }) : "Drive no disponible. Reintentá en unos segundos.";
+        setLiveError(base);
         setLiveRetryable(true);
         return;
       }
-      setLiveError(data.error ?? "No se pudo crear el apunte en vivo.");
+      setLiveError(formatDriveError(data as { error?: string; hint?: string; details?: string }) || data.error || "No se pudo crear el apunte en vivo.");
       if (data.retryable) setLiveRetryable(true);
     } catch {
       setLiveError("Error de red. Reintentá.");
@@ -1220,6 +1319,15 @@ export function SubjectModal({
             <p className="mt-2 text-sm text-[var(--muted)]">
               {formatClassDate(classDate)} · {subject.start} – {subject.end}
             </p>
+            <button
+              type="button"
+              onClick={handleCreateEventFromSchedule}
+              aria-label={`Crear evento para ${subject.code}`}
+              className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 sm:w-auto"
+            >
+              <CalendarPlus size={14} aria-hidden="true" />
+              Crear evento para {subject.code}
+            </button>
             <div className="mt-6 grid grid-cols-2 gap-3">
               {[
                 ["Profesor", subject.professor],

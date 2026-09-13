@@ -23,6 +23,7 @@ import {
   type EventType,
 } from "@/lib/academic-events";
 import type { Subject } from "@/lib/schedule-data";
+import { parseDateInput } from "@/lib/calendar-utils";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { hoverTransition, pageVariants, springTransition, staggerContainer, staggerItem, subtleCardHover, useReducedMotion, withReducedMotion } from "@/lib/motion";
 import {
@@ -73,6 +74,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   const [detailEvent, setDetailEvent] = useState<EnrichedEvent | null>(null);
   const [error, setError] = useState("");
   const selectedEventRef = useRef<HTMLElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const canManage = isAdmin || !supabaseConfigured;
   const canCreate = canManage || Boolean(userId);
   const canEdit = (event: AcademicEvent) => canManage || (Boolean(userId) && event.created_by === userId);
@@ -114,6 +116,49 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     return () => { active = false; window.removeEventListener("horarium:events-changed", refresh); };
   }, []);
 
+  // Crear evento desde calendario — prefill via horarium:create-event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { subjectId?: string | null; subjectName?: string; subjectCode?: string | null; date?: string; time?: string } | undefined;
+      if (!detail) return;
+      const rawDate = typeof detail.date === "string" ? detail.date.trim() : "";
+      const rawTime = typeof detail.time === "string" ? detail.time.trim() : "";
+      let normalizedDate = "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) && parseDateInput(rawDate)) normalizedDate = rawDate;
+      let normalizedTime: string | null = null;
+      if (/^\d{2}:\d{2}$/.test(rawTime)) {
+        const [h, m] = rawTime.split(":").map(Number);
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) normalizedTime = rawTime;
+      }
+      const sid = typeof detail.subjectId === "string" && detail.subjectId ? detail.subjectId : null;
+      const subj = sid ? subjects.find((s) => s.id === sid) : null;
+      const code = subj?.code ?? (typeof detail.subjectCode === "string" ? detail.subjectCode : null);
+      setForm({
+        title: "",
+        type: "tarea",
+        date: normalizedDate,
+        time: normalizedTime ?? "",
+        subject_id: sid,
+        subject_code: code,
+        description: "",
+        status: "pending",
+        event_type: "individual",
+      });
+      setEditing(true);
+      // Ensure new event will be visible
+      setTypeFilter("all");
+      setStatusFilter("all");
+      setSubjectFilter("all");
+      setCompletionFilter("pendientes");
+      setError("");
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => titleInputRef.current?.focus());
+      });
+    };
+    window.addEventListener("horarium:create-event", handler as EventListener);
+    return () => window.removeEventListener("horarium:create-event", handler as EventListener);
+  }, [subjects]);
+
 
 
   const otherFiltered = useMemo(() => {
@@ -138,24 +183,42 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const isCreating = !form.id;
+    const snapshot = { ...form };
     const result = await saveAcademicEvent(form);
     if (result.error) return setError(result.error);
     resetForm();
     const fresh = await loadAcademicEvents();
     setEvents(fresh.events);
     onDataChanged?.();
+    // Highlight newly created event (existing ring + 4s logic via app-shell)
+    if (isCreating) {
+      const created = fresh.events.find((e) => e.title === snapshot.title && e.date === snapshot.date) ?? fresh.events[0];
+      const eventId = created?.id ?? null;
+      if (eventId) {
+        // Ensure visible filters so highlight can scroll into view
+        setCompletionFilter("pendientes");
+        setTypeFilter("all");
+        setStatusFilter("all");
+        setSubjectFilter("all");
+        try {
+          window.localStorage.setItem(FILTER_STORAGE_KEY, "pendientes");
+        } catch {}
+        window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events", eventId } }));
+        window.dispatchEvent(new CustomEvent("horarium:events-show-pendientes"));
+      }
+    }
     if (isCreating && supabase && userId) {
       try {
-        const created = fresh.events.find((e) => e.title === form.title && e.date === form.date) ?? fresh.events[0];
-        const eventId = created?.id ?? null;
+        const createdForNotify = fresh.events.find((e) => e.title === snapshot.title && e.date === snapshot.date) ?? fresh.events[0];
+        const eventId = createdForNotify?.id ?? null;
         if (!eventId) return;
         const { data: profiles } = await supabase.from("profiles").select("id");
         const recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
         if (recipients.length === 0) return;
         const { createNotifications } = await import("@/lib/notifications");
-        const subjectCode = form.subject_id ? (subjects.find((s) => s.id === form.subject_id)?.code ?? "") : "";
+        const subjectCode = snapshot.subject_id ? (subjects.find((s) => s.id === snapshot.subject_id)?.code ?? "") : "";
         const title = "Nuevo evento";
-        const body = `${form.title}${subjectCode ? ` · ${subjectCode}` : ""} · ${form.date}${form.time ? ` ${form.time.slice(0, 5)}` : ""}`;
+        const body = `${snapshot.title}${subjectCode ? ` · ${subjectCode}` : ""} · ${snapshot.date}${snapshot.time ? ` ${snapshot.time.slice(0, 5)}` : ""}`;
         const chunkSize = 50;
         for (let i = 0; i < recipients.length; i += chunkSize) {
           const chunk = recipients.slice(i, i + chunkSize);
@@ -270,7 +333,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
             className="mb-6 rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4 sm:p-6"
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-[var(--muted)]">Título<input className="admin-control mt-1" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
+              <label className="text-xs font-semibold text-[var(--muted)]">Título<input ref={titleInputRef} className="admin-control mt-1" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Tipo<select className="admin-control mt-1" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as AcademicEventType })}>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Fecha<input className="admin-control mt-1" required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Hora opcional<input className="admin-control mt-1" type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label>

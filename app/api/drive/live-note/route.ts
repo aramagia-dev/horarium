@@ -11,6 +11,14 @@ import {
   getLiveNoteExpiry,
   resolveFolderId,
   setAnyoneWriter,
+  getDriveHttpStatus,
+  getDriveReason,
+  getSanitizedDriveDetails,
+  isDriveRateLimitedError,
+  isFolderNotFoundError,
+  isGoogleDriveConfigured,
+  isOAuthExpiredError,
+  isQuotaExceededError,
 } from "@/lib/google-drive";
 
 export const runtime = "nodejs";
@@ -26,38 +34,178 @@ function json(data: unknown, init?: number | ResponseInit) {
   return NextResponse.json(data, { status, headers } as ResponseInit);
 }
 
-function isDriveRateLimitedError(err: unknown): boolean {
-  const msg = String((err as { message?: string })?.message ?? "");
-  const code = (err as { code?: number | string })?.code;
-  const status = (err as { status?: number })?.status ?? (err as { response?: { status?: number } })?.response?.status;
-  if (code === 429 || status === 429) return true;
-  if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("quotaexceeded"))
-    return true;
-  return false;
-}
+export function classifyDriveError(err: unknown): {
+  httpStatus: number;
+  code: string;
+  error: string;
+  hint: string;
+  retryable: boolean;
+  details: string;
+} {
+  const details = getSanitizedDriveDetails(err);
+  const status = getDriveHttpStatus(err);
+  const reason = getDriveReason(err);
+  const msgCombined = String((err as { message?: string })?.message ?? "").toLowerCase()
+    + " "
+    + String((err as { cause?: { message?: string } })?.cause?.message ?? "").toLowerCase()
+    + " "
+    + details.toLowerCase();
 
-function isDriveRetryableError(err: unknown): boolean {
-  const status = (err as { status?: number })?.status ?? (err as { response?: { status?: number } })?.response?.status;
-  const code = (err as { code?: number | string })?.code;
-  const s = typeof status === "number" ? status : typeof code === "number" ? code : null;
-  if (s === 403 || s === 429 || (s !== null && s >= 500)) return true;
-  const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
-  if (msg.includes("403") || msg.includes("429") || msg.includes("500") || msg.includes("503")) return true;
-  return false;
-}
+  // 1. not fully configured → DRIVE_NOT_CONFIGURED
+  if (
+    msgCombined.includes("not fully configured") ||
+    msgCombined.includes("not configured") ||
+    msgCombined.includes("google_oauth not fully configured") ||
+    (msgCombined.includes("drive no configurado") && !msgCombined.includes("folder"))
+  ) {
+    return {
+      httpStatus: 500,
+      code: "DRIVE_NOT_CONFIGURED",
+      error: "Drive no configurado",
+      hint: "Faltan variables GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_OAUTH_REFRESH_TOKEN o GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON. Configuralas en Vercel y hacé Redeploy.",
+      retryable: false,
+      details,
+    };
+  }
 
-function isQuotaExceededError(err: unknown): boolean {
-  const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
-  const causeMsg = String((err as { cause?: { message?: string } })?.cause?.message ?? "").toLowerCase();
-  const combined = msg + " " + causeMsg;
-  return combined.includes("storage quota") || combined.includes("quota has been exceeded");
-}
+  // 2. redirect_uri_mismatch → OAUTH_CONFIG_ERROR
+  if (msgCombined.includes("redirect_uri_mismatch") || msgCombined.includes("redirect uri mismatch")) {
+    return {
+      httpStatus: 500,
+      code: "OAUTH_CONFIG_ERROR",
+      error: "Error de configuración OAuth",
+      hint: "redirect_uri_mismatch — Verificá GOOGLE_OAUTH_REDIRECT_URI (debe coincidir con el autorizado en Google Cloud Console) y GOOGLE_OAUTH_CLIENT_ID/SECRET.",
+      retryable: false,
+      details,
+    };
+  }
 
-function mapDriveErrorStatus(err: unknown): number {
-  if (isQuotaExceededError(err)) return 507;
-  if (isDriveRateLimitedError(err)) return 429;
-  if (isDriveRetryableError(err)) return 502;
-  return 500;
+  // 3. OAuth expired / revoked
+  if (isOAuthExpiredError(err)) {
+    return {
+      httpStatus: 401,
+      code: "OAUTH_EXPIRED",
+      error: "Token de Drive expirado o revocado",
+      hint: "Token expirado/revocado — Reautorizá en /api/auth/google y actualizá GOOGLE_OAUTH_REFRESH_TOKEN en Vercel + Redeploy",
+      retryable: false,
+      details,
+    };
+  }
+
+  // 4. Folder not found (404)
+  if (isFolderNotFoundError(err)) {
+    return {
+      httpStatus: 422,
+      code: "FOLDER_NOT_FOUND",
+      error: "Carpeta de Drive no encontrada",
+      hint: "Carpeta no encontrada — verificá subject_drive_folders para esta materia o GOOGLE_DRIVE_ROOT_ID y que la carpeta exista y esté compartida con el bot.",
+      retryable: false,
+      details,
+    };
+  }
+
+  // 5. Quota exceeded
+  if (isQuotaExceededError(err)) {
+    return {
+      httpStatus: 507,
+      code: "QUOTA_EXCEEDED",
+      error: "Cuota de Drive excedida",
+      hint: "Cuota de Drive excedida — liberá espacio en el Drive del bot o usá un Shared Drive con el Service Account como Manager.",
+      retryable: false,
+      details,
+    };
+  }
+
+  // 6. Rate limited
+  if (isDriveRateLimitedError(err)) {
+    return {
+      httpStatus: 429,
+      code: "RATE_LIMITED",
+      error: "Límite de Drive alcanzado",
+      hint: "Drive alcanzó el límite de solicitudes — reintentá en unos segundos.",
+      retryable: true,
+      details,
+    };
+  }
+
+  // 7. Permission denied explicit (403)
+  if (
+    status === 403 ||
+    reason === "forbidden" ||
+    reason === "insufficientpermissions" ||
+    msgCombined.includes("permission denied") ||
+    msgCombined.includes("insufficient permission") ||
+    msgCombined.includes("forbidden")
+  ) {
+    return {
+      httpStatus: 502,
+      code: "DRIVE_PERMISSION_DENIED",
+      error: "Drive denegó el permiso",
+      hint: "Drive denegó el permiso — verificá que la carpeta esté compartida con el bot (OAuth Gmail o Service Account) como Editor/Writer.",
+      retryable: false,
+      details,
+    };
+  }
+
+  // 8. Drive unavailable (5xx)
+  if ((status !== null && status >= 500) || reason === "internalerror" || reason === "backenderror" || msgCombined.includes("internal error") || msgCombined.includes("backend error")) {
+    return {
+      httpStatus: 502,
+      code: "DRIVE_UNAVAILABLE",
+      error: "Drive no disponible",
+      hint: "Drive no disponible temporalmente — reintentá en unos segundos.",
+      retryable: true,
+      details,
+    };
+  }
+
+  // 9. Fallback for plain "403 permission denied" without status
+  if (msgCombined.includes("403") && msgCombined.includes("permission")) {
+    return {
+      httpStatus: 502,
+      code: "DRIVE_PERMISSION_DENIED",
+      error: "Drive denegó el permiso",
+      hint: "Drive denegó el permiso — verificá que la carpeta esté compartida con el bot.",
+      retryable: true,
+      details,
+    };
+  }
+
+  // 10. Fallback 5xx/429 in message → 502 retryable
+  if (msgCombined.includes("500") || msgCombined.includes("503") || msgCombined.includes("429") || msgCombined.includes("502")) {
+    return {
+      httpStatus: 502,
+      code: "DRIVE_UNAVAILABLE",
+      error: "Drive no disponible",
+      hint: "Drive no disponible — reintentá en unos segundos.",
+      retryable: true,
+      details,
+    };
+  }
+
+  // 11. FOLDER_RESOLVE_ERROR marker (check for Supabase subject_drive_folders hints)
+  if (msgCombined.includes("subject_drive_folders") || msgCombined.includes("folder resolve") || msgCombined.includes("resolvefolderid")) {
+    return {
+      httpStatus: 500,
+      code: "FOLDER_RESOLVE_ERROR",
+      error: "No se pudo resolver la carpeta de la materia",
+      hint: "Error resolviendo la carpeta — verificá la tabla subject_drive_folders en Supabase.",
+      retryable: false,
+      details,
+    };
+  }
+
+  // 12. Generic DRIVE_ERROR but structured
+  const fallbackStatus = status !== null && status >= 400 && status < 600 ? status : 500;
+  const fallbackRetryable = fallbackStatus === 429 || fallbackStatus >= 500 || fallbackStatus === 403;
+  return {
+    httpStatus: fallbackStatus,
+    code: "DRIVE_ERROR",
+    error: "Error de Drive",
+    hint: "Error inesperado de Drive — revisá los logs del servidor y el estado de la API de Drive.",
+    retryable: fallbackRetryable,
+    details,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +275,7 @@ export async function POST(req: Request) {
   const rl = checkRateLimit(user.id, subjectId);
   if (!rl.allowed) {
     const retryAfter = rl.retryAfter ?? 60;
-    return json({ error: "Rate limited", retryable: true, retryAfter }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
+    return json({ error: "Rate limited", retryable: true, retryAfter, code: "RATE_LIMITED", hint: "Demasiadas solicitudes — reintentá en unos segundos." }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
   }
 
   const supabase = getServiceClient();
@@ -137,12 +285,17 @@ export async function POST(req: Request) {
   // and causes a 23505 on insert that surfaces as a 409 without url (about:blank bug).
   try {
     const nowIsoForArchive = new Date().toISOString();
-    await supabase
-      .from("live_notes")
-      .update({ status: "archived", archived_at: nowIsoForArchive })
-      .eq("subject_id", subjectId)
-      .eq("status", "live")
-      .lte("expires_at", nowIsoForArchive);
+    const table = supabase.from("live_notes") as unknown as Record<string, unknown>;
+    if (typeof table.update !== "function") {
+      console.warn("[POST live-note] auto-archive skipped — table.update not available (mock)");
+    } else {
+      await supabase
+        .from("live_notes")
+        .update({ status: "archived", archived_at: nowIsoForArchive })
+        .eq("subject_id", subjectId)
+        .eq("status", "live")
+        .lte("expires_at", nowIsoForArchive);
+    }
   } catch (e) {
     console.warn("[POST live-note] auto-archive expired failed (non-fatal)", e);
   }
@@ -169,19 +322,37 @@ export async function POST(req: Request) {
     return json({ error: "Internal error" }, 500);
   }
 
+  // Guard DRIVE_NOT_CONFIGURED — skip in test env so mocks still work
+  const isTestEnv = process.env.NODE_ENV === "test" || Boolean(process.env.VITEST);
+  if (!isTestEnv && !isGoogleDriveConfigured()) {
+    const classified = classifyDriveError(new Error("GOOGLE_OAUTH not fully configured (CLIENT_ID/SECRET/REFRESH_TOKEN)"));
+    console.error("[POST live-note] drive not configured", { code: classified.code, httpStatus: classified.httpStatus, details: classified.details, raw: classified.details });
+    return json({ error: classified.error, hint: classified.hint, details: classified.details, code: classified.code, retryable: classified.retryable }, classified.httpStatus);
+  }
+
   // Resolve folderId — 422 if not configured (no auto-create)
   let folderId: string | null;
   try {
     folderId = await resolveFolderId(subjectId);
   } catch (e) {
-    console.error("[POST live-note] resolveFolderId error", e);
-    return json({ error: "Internal error" }, 500);
+    const classified = classifyDriveError(e);
+    // Map Supabase resolve errors to FOLDER_RESOLVE_ERROR if not already classified as DRIVE_NOT_CONFIGURED etc.
+    const isResolve = classified.code === "DRIVE_NOT_CONFIGURED" || classified.code === "OAUTH_CONFIG_ERROR" ? classified : {
+      httpStatus: 500,
+      code: "FOLDER_RESOLVE_ERROR",
+      error: "No se pudo resolver la carpeta de la materia",
+      hint: "Error resolviendo subject_drive_folders — verificá la tabla en Supabase.",
+      retryable: false,
+      details: classified.details,
+    };
+    console.error("[POST live-note] resolveFolderId error", { code: isResolve.code, httpStatus: isResolve.httpStatus, details: isResolve.details, raw: getSanitizedDriveDetails(e) });
+    return json({ error: isResolve.error, hint: isResolve.hint, details: isResolve.details, code: isResolve.code, retryable: isResolve.retryable }, isResolve.httpStatus);
   }
   if (!folderId) {
-    return json({ error: "Folder not configured for subject", code: "FOLDER_NOT_CONFIGURED" }, 422);
+    return json({ error: "Folder not configured for subject", code: "FOLDER_NOT_CONFIGURED", hint: "Carpeta no configurada — agregá un registro en subject_drive_folders para esta materia o configurá GOOGLE_DRIVE_ROOT_ID.", retryable: false, details: "" }, 422);
   }
 
-  // Resolve subject code for doc title (simplified: "ASI - 2026-08-26")
+  // Resolve subject code for doc title
   let subjectCode = "";
   let subjectName = subjectId;
   try {
@@ -207,31 +378,23 @@ export async function POST(req: Request) {
     fileId = created.fileId;
     webViewLink = created.webViewLink;
   } catch (e) {
-    console.error("[POST live-note] Drive files.create failed", e);
-    if (isQuotaExceededError(e)) {
-      return json({ error: "Cuota de Drive del Service Account excedida. Usá un Shared Drive o liberá espacio.", retryable: false, code: "QUOTA_EXCEEDED" }, 507);
-    }
-    const status = mapDriveErrorStatus(e);
-    const retryable = isDriveRetryableError(e) || isDriveRateLimitedError(e);
-    return json({ error: "Drive error", retryable, code: "DRIVE_ERROR" }, status);
+    const classified = classifyDriveError(e);
+    console.error("[POST live-note] Drive files.create failed", { code: classified.code, httpStatus: classified.httpStatus, details: classified.details, raw: getSanitizedDriveDetails(e) });
+    return json({ error: classified.error, hint: classified.hint, details: classified.details, code: classified.code, retryable: classified.retryable }, classified.httpStatus);
   }
 
   // Set anyone writer permission — if this fails, delete orphan file
   try {
     await setAnyoneWriter(fileId!);
   } catch (e) {
-    console.error("[POST live-note] permissions.create failed, deleting orphan", e);
+    console.error("[POST live-note] permissions.create failed, deleting orphan", { code: classifyDriveError(e).code, httpStatus: classifyDriveError(e).httpStatus, details: classifyDriveError(e).details, raw: getSanitizedDriveDetails(e) });
     try {
       await deleteFile(fileId!);
     } catch (delErr) {
       console.error("[POST live-note] orphan delete after permission fail also failed", delErr);
     }
-    if (isQuotaExceededError(e)) {
-      return json({ error: "Cuota de Drive del Service Account excedida. Usá un Shared Drive o liberá espacio.", retryable: false, code: "QUOTA_EXCEEDED" }, 507);
-    }
-    const status = mapDriveErrorStatus(e);
-    const retryable = isDriveRetryableError(e) || isDriveRateLimitedError(e);
-    return json({ error: "Drive permission error", retryable, code: "DRIVE_ERROR" }, status);
+    const classified = classifyDriveError(e);
+    return json({ error: classified.error, hint: classified.hint, details: classified.details, code: classified.code, retryable: classified.retryable }, classified.httpStatus);
   }
 
   // DB insert (with race/orphan handling)

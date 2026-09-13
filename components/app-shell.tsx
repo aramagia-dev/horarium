@@ -18,6 +18,7 @@ import { SubjectModal } from "@/components/subject-modal";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { scheduleSessions, type ScheduleEntry } from "@/lib/schedule-data";
 import { isEventOverdue, type AcademicEvent, type EnrichedEvent } from "@/lib/academic-events";
+import { formatDateInput } from "@/lib/calendar-utils";
 import { useAuth } from "@/lib/auth-context";
 import { useSchedule } from "@/lib/schedule-context";
 import { backdropVariants, drawerVariants, pageVariants, useReducedMotion } from "@/lib/motion";
@@ -103,6 +104,15 @@ export default function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fallback: ensure horarium:create-event also navigates to Eventos even if subject-modal didn't dispatch navigate (race safety)
+  useEffect(() => {
+    const handler = () => {
+      if (view !== "events") navigate("events");
+    };
+    window.addEventListener("horarium:create-event", handler as EventListener);
+    return () => window.removeEventListener("horarium:create-event", handler as EventListener);
+  }, [view]);
+
   return <main className="min-h-screen max-w-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
     <motion.header
       initial={reduced ? false : { opacity: 0, y: -6 }}
@@ -144,7 +154,7 @@ export default function AppShell() {
         </AnimatePresence>
       </div>
     </div>
-      {selectedSubject ? <SubjectModal subject={selectedSubject} sessions={schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId)} date={selectedDate ?? undefined} legacyEntryIds={[...schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id), ...scheduleSessions.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id)]} onClose={() => { setSelectedSubject(null); setSelectedDate(null); }} onOpenNotes={() => { setSelectedSubject(null); setSelectedDate(null); setView("notes"); }} /> : null}
+      {selectedSubject ? <SubjectModal subject={selectedSubject} sessions={schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId)} date={selectedDate ?? undefined} prefillDate={selectedDate ? formatDateInput(selectedDate) : undefined} prefillTime={selectedSubject.start.slice(0, 5)} subjectIdForEvent={selectedSubject.subjectId} legacyEntryIds={[...schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id), ...scheduleSessions.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id)]} onClose={() => { setSelectedSubject(null); setSelectedDate(null); }} onOpenNotes={() => { setSelectedSubject(null); setSelectedDate(null); setView("notes"); }} /> : null}
   </main>;
 }
 

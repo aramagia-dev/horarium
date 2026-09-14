@@ -88,6 +88,15 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     if (!form.subject_id) return [];
     return availableComisionesBySubject.get(form.subject_id) ?? [];
   }, [form.subject_id, availableComisionesBySubject]);
+  const [comisionFilter, setComisionFilter] = useState("all");
+  // Comisión options follow the subject filter: one subject → its comisiones,
+  // no subject → every known comisión code.
+  const filterComisiones = useMemo(() => {
+    if (subjectFilter !== "all") return availableComisionesBySubject.get(subjectFilter) ?? [];
+    const all = new Set<string>();
+    for (const list of availableComisionesBySubject.values()) for (const c of list) all.add(c);
+    return [...all].sort();
+  }, [subjectFilter, availableComisionesBySubject]);
 
   // persist + restore completion filter (URL/storage else memory)
   useEffect(() => {
@@ -155,6 +164,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
       setEditing(true);
       // Ensure new event will be visible
       setTypeFilter("all");
+      setComisionFilter("all");
       setSubjectFilter("all");
       setCompletionFilter("pendientes");
       setError("");
@@ -193,9 +203,10 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
       (event) =>
         (typeFilter === "all" || event.type === typeFilter) &&
         (subjectFilter === "all" || event.subject_id === subjectFilter) &&
+        (comisionFilter === "all" || !event.comision_id || event.comision_id === comisionFilter) &&
         isEventVisible({ subject_id: event.subject_id ?? null, comision_id: (event as unknown as { comision_id?: string | null }).comision_id ?? null }, enrollments),
     );
-  }, [events, subjectFilter, typeFilter, enrollments]);
+  }, [events, comisionFilter, subjectFilter, typeFilter, enrollments]);
 
   const counts = useMemo(() => getCompletionCounts(otherFiltered as EnrichedEvent[]), [otherFiltered]);
 
@@ -232,6 +243,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         // Ensure visible filters so highlight can scroll into view
         setCompletionFilter("pendientes");
         setTypeFilter("all");
+        setComisionFilter("all");
         setSubjectFilter("all");
         try {
           window.localStorage.setItem(FILTER_STORAGE_KEY, "pendientes");
@@ -434,12 +446,15 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         })}
       </div>
 
-      <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="mb-5 grid gap-3 sm:grid-cols-2">
+      <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="mb-5 grid gap-3 sm:grid-cols-3">
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
           <select aria-label="Filtrar por tipo" className="admin-control" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}><option value="all">Todos los tipos</option>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select>
         </motion.div>
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
-          <select aria-label="Filtrar por materia" className="admin-control" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option value="all">Todas las materias</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code}</option>)}</select>
+          <select aria-label="Filtrar por materia" className="admin-control" value={subjectFilter} onChange={(e) => { setSubjectFilter(e.target.value); setComisionFilter("all"); }}><option value="all">Todas las materias</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code}</option>)}</select>
+        </motion.div>
+        <motion.div variants={withReducedMotion(staggerItem, reduced)}>
+          <select aria-label="Filtrar por comisión" className="admin-control" value={comisionFilter} onChange={(e) => setComisionFilter(e.target.value)} disabled={filterComisiones.length === 0}><option value="all">Todas las comisiones</option>{filterComisiones.map((c) => <option key={c} value={c}>{c}</option>)}</select>
         </motion.div>
       </motion.div>
       {selectedEvent && !selectedEventVisible ? <p role="status" className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">El evento seleccionado, «{selectedEvent.title}», está oculto por los filtros actuales.</p> : null}
@@ -464,7 +479,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
           </motion.div>
         ) : (
           <motion.div
-            key={`${typeFilter}-${subjectFilter}-${completionFilter}`}
+            key={`${typeFilter}-${subjectFilter}-${comisionFilter}-${completionFilter}`}
             variants={withReducedMotion(staggerContainer, reduced)}
             initial="hidden"
             animate="visible"
@@ -509,7 +524,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                           {!isFeriado && isGrupal ? <span className="flex items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]"><Users size={10} aria-hidden="true" />Grupal</span> : null}
                           {!isFeriado && isCompleted ? <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-600"><CheckCircle2 size={10} aria-hidden="true" />Completado</span> : null}
                         </div>
-                        <p className="mt-1 text-sm text-[var(--muted)]">{event.time ? `${event.time.slice(0, 5)} · ` : "Todo el día · "}{event.subject_code ?? "Sin materia"} · {labels[event.status]}{isOverdue ? " · Vencido" : ""}</p>
+                        <p className="mt-1 text-sm text-[var(--muted)]">{event.time ? `${event.time.slice(0, 5)} · ` : "Todo el día · "}{event.subject_code ?? "Sin materia"}{event.comision_id ? ` · ${event.comision_id}` : ""} · {labels[event.status]}{isOverdue ? " · Vencido" : ""}</p>
                         {event.description ? <p className="mt-2 text-sm leading-6 text-[var(--foreground)]">{event.description}</p> : null}
                         {/* Avatar stack — PR2 3.4 */}
                         {showAvatars && !isFeriado ? (

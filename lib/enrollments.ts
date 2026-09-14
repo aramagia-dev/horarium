@@ -240,3 +240,50 @@ export function shouldOverlapBeChecked(
 ): boolean {
   return isSameComision(candidateComision, existingComision);
 }
+
+export type OverlapSlot = {
+  subjectId: string;
+  comisionId?: string | null;
+  day: string;
+  start: string;
+  end: string;
+};
+
+export type EnrollmentOverlap = { day: string; a: OverlapSlot; b: OverlapSlot };
+
+function slotsOverlap(a: OverlapSlot, b: OverlapSlot): boolean {
+  return a.start < b.end && b.start < a.end;
+}
+
+/**
+ * Finds time conflicts among the user's enrolled sessions.
+ * Returns one entry per overlapping pair (same day, intersecting HH:MM ranges),
+ * so pickers can warn instead of silently stacking subjects in the calendar.
+ */
+export function findEnrollmentOverlaps<T extends OverlapSlot>(schedule: T[], enrollments: EnrollmentMap): EnrollmentOverlap[] {
+  const mine = schedule.filter((entry) => {
+    const enrolled = enrollments.get(entry.subjectId);
+    if (enrolled === undefined) return false;
+    const cid = entry.comisionId ?? null;
+    return cid === null || cid === enrolled;
+  });
+  const byDay = new Map<string, T[]>();
+  for (const entry of mine) {
+    const list = byDay.get(entry.day) ?? [];
+    list.push(entry);
+    byDay.set(entry.day, list);
+  }
+  const out: EnrollmentOverlap[] = [];
+  for (const [day, list] of byDay) {
+    const sorted = [...list].sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0));
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const a = sorted[i]!;
+        const b = sorted[j]!;
+        if (b.start >= a.end) break;
+        if (slotsOverlap(a, b)) out.push({ day, a, b });
+      }
+    }
+  }
+  return out;
+}

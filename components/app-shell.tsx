@@ -90,7 +90,9 @@ export default function AppShell() {
   // savedTick forces re-read of localStorage flag after Guardar without reload
   void savedTick;
   const onboarded = enrollments.size > 0 || Boolean(userId && hasSavedOnboarding(userId));
-  const emptyMeansAll = !onboarded;
+  // admins manage content but don't take subjects: their calendar stays empty
+  // even before any enrollment, instead of showing the merged global view.
+  const emptyMeansAll = !onboarded && !isAdmin;
   const rawSchedule = publicData?.schedule ?? [];
   const schedule = getEnrolledSchedule(rawSchedule, enrollments, { emptyMeansAll });
   const visibleEventsForCalendar = (publicData?.events ?? []).filter((e) =>

@@ -4,8 +4,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSchedule } from "@/lib/schedule-context";
+import { dayLabel, type Day } from "@/lib/schedule-data";
 import {
   deriveAvailableComisiones,
+  findEnrollmentOverlaps,
   getOnboardingPreselections,
   getSubjectYears,
   isOnboardingDismissed,
@@ -16,7 +18,7 @@ import {
 } from "@/lib/enrollments";
 
 export function EnrollmentOnboarding() {
-  const { userId } = useAuth();
+  const { userId, isAdmin } = useAuth();
   const { publicData, enrollments, saveEnrollment } = useSchedule();
 
   const available = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
@@ -51,27 +53,44 @@ export function EnrollmentOnboarding() {
   }, [preselected]);
 
   useEffect(() => {
-    if (!userId) {
+    // admins manage content but don't take subjects: never onboard them.
+    if (!userId || isAdmin) {
       setVisible(false);
       return;
     }
     const isDismissed = isOnboardingDismissed(userId);
     const shouldShow = shouldShowOnboarding(enrollments, isDismissed, userId) && subjectsWithComisiones.length > 0;
     setVisible(shouldShow);
-  }, [userId, enrollments, subjectsWithComisiones.length]);
+  }, [userId, isAdmin, enrollments, subjectsWithComisiones.length]);
 
   // allow external reopen (catalog-board can dispatch event)
   useEffect(() => {
     const handler = () => {
-      if (!userId) return;
+      if (!userId || isAdmin) return;
       setOnboardingDismissed(userId, false);
       setVisible(shouldShowOnboarding(enrollments, false, userId) && subjectsWithComisiones.length > 0);
     };
     window.addEventListener("horarium:reopen-onboarding", handler as EventListener);
     return () => window.removeEventListener("horarium:reopen-onboarding", handler as EventListener);
-  }, [userId, enrollments, subjectsWithComisiones.length]);
+  }, [userId, isAdmin, enrollments, subjectsWithComisiones.length]);
 
-  if (!visible || !userId) return null;
+  // warn when the current picks overlap each other in the week
+  const overlaps = useMemo(() => {
+    const picks = new Map<string, string>();
+    for (const [sid, cid] of selections) {
+      if (cid && cid !== "__no__") picks.set(sid, cid);
+    }
+    if (picks.size < 2) return [];
+    return findEnrollmentOverlaps(publicData?.schedule ?? [], picks);
+  }, [selections, publicData]);
+
+  const codeOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of publicData?.subjects ?? []) map.set(s.id, s.code);
+    return map;
+  }, [publicData]);
+
+  if (!visible || !userId || isAdmin) return null;
   if (subjectsWithComisiones.length === 0) return null;
 
   const handleSave = async () => {
@@ -157,6 +176,20 @@ export function EnrollmentOnboarding() {
             );
           })}
         </div>
+
+        {overlaps.length > 0 ? (
+          <div role="alert" className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:text-amber-200">
+            <p className="font-semibold">Estas comisiones se superponen en tu semana:</p>
+            <ul className="mt-1 list-disc pl-4">
+              {overlaps.map((o, i) => (
+                <li key={`${o.day}-${i}`}>
+                  {codeOf.get(o.a.subjectId) ?? o.a.subjectId} ({o.a.comisionId}) {dayLabel(o.a.day as Day)} {o.a.start}–{o.a.end} choca con{" "}
+                  {codeOf.get(o.b.subjectId) ?? o.b.subjectId} ({o.b.comisionId}) {o.b.start}–{o.b.end}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="mt-6 flex justify-end gap-3">
           <button

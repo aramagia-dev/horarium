@@ -338,7 +338,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
                 if (offset.x < 0) goNextDay();
                 else goPrevDay();
               }}
-              className="w-full max-w-full min-w-0 space-y-3 overflow-x-hidden p-4"
+              className="w-full max-w-full min-w-0 space-y-4 overflow-x-hidden p-4"
             >
               {schedule
                 .filter((item) => item.day === activeDay)
@@ -386,6 +386,10 @@ function ScheduleCard({ entry, date, events, subjectSessions, onSelect, onSelect
   const top = timelineInset + (minutesFromStart(entry.start) / totalMinutes) * timelineContentHeight;
   const height = ((minutesFromStart(entry.end) - minutesFromStart(entry.start)) / totalMinutes) * timelineContentHeight;
   const sessionEvents = getSessionEvents(entry, date, events, subjectSessions);
+  // Short sessions get less vertical room than their content needs: shed lines
+  // instead of clipping them, and leave 1px breathing room so neighbors don't touch.
+  const compact = height < 120;
+  const tiny = height < 84;
   return (
     <motion.div
       role="button"
@@ -395,14 +399,14 @@ function ScheduleCard({ entry, date, events, subjectSessions, onSelect, onSelect
       whileHover={reduced ? undefined : scheduleCardHover}
       whileTap={reduced ? undefined : { scale: 0.99 }}
       transition={hoverTransition}
-      className={`schedule-card accent-${entry.accent} absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-[10px] border px-3 py-2.5 text-left sm:left-2 sm:right-2`}
-      style={{ top, height, minHeight: 108 }}
+      className={`schedule-card accent-${entry.accent} absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-[10px] border px-3 text-left sm:left-2 sm:right-2 ${compact ? "py-1.5" : "py-2.5"}`}
+      style={{ top: top + 1, height: Math.max(height - 2, 48) }}
     >
       <span className="block truncate text-[10px] font-bold tracking-[0.12em] opacity-80 uppercase">{entry.section}</span>
-      {sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} compact /> : null}
-      <strong className="mt-1 block line-clamp-2 text-sm font-bold leading-4">{entry.subject}</strong>
-      <span className="mt-1.5 block truncate text-[11px] font-medium opacity-75">{entry.professor}</span>
-      <span className="mt-0.5 block truncate text-[11px] font-medium opacity-75">{entry.room}</span>
+      {!tiny && sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} compact /> : null}
+      <strong className={`mt-1 block font-bold ${tiny ? "line-clamp-1 text-[13px] leading-4" : "line-clamp-2 text-sm leading-4"}`}>{entry.subject}</strong>
+      {tiny ? null : <span className="mt-1.5 block truncate text-[11px] font-medium opacity-75">{entry.professor}</span>}
+      {compact ? null : <span className="mt-0.5 block truncate text-[11px] font-medium opacity-75">{entry.room}</span>}
     </motion.div>
   );
 }

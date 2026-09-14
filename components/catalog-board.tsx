@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { dayLabel, type CatalogProfessor, type CatalogRoom, type ScheduleEntry, type Subject } from "@/lib/schedule-data";
+import { dayLabel, type CatalogProfessor, type CatalogRoom, type Day, type ScheduleEntry, type Subject } from "@/lib/schedule-data";
 import { catalogCardHover, hoverTransition, pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 import { useSchedule } from "@/lib/schedule-context";
 import { useAuth } from "@/lib/auth-context";
-import { deriveAvailableComisiones, getSubjectYears, sortSubjectsForPicking } from "@/lib/enrollments";
+import { deriveAvailableComisiones, findEnrollmentOverlaps, getSubjectYears, sortSubjectsForPicking } from "@/lib/enrollments";
 
 type CatalogKind = "subjects" | "professors" | "rooms";
 
@@ -21,6 +21,9 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const availableForEditor = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
   const subjectYearsForEditor = useMemo(() => getSubjectYears(availableForEditor), [availableForEditor]);
   const [selectedYearEditor, setSelectedYearEditor] = useState<"all" | "3" | "4">("all");
+  // default view: only the subjects the user is taking; "all" reveals the rest.
+  const [editorScope, setEditorScope] = useState<"mine" | "all">("mine");
+  const showMine = editorScope === "mine" && Boolean(userId);
   const subjectsForEditor = useMemo(() => {
     const filtered = subjects.filter((s) => availableForEditor.has(s.id));
     const byYear =
@@ -31,9 +34,21 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
             if (!years || years.length === 0) return false;
             return years.includes(selectedYearEditor);
           });
+    const byScope = showMine ? byYear.filter((s) => enrollments.has(s.id)) : byYear;
     const schedule = publicData?.schedule ?? [];
-    return sortSubjectsForPicking(byYear, availableForEditor, schedule as unknown as Array<{ subjectId: string; section: string }>);
-  }, [subjects, availableForEditor, subjectYearsForEditor, selectedYearEditor, publicData]);
+    return sortSubjectsForPicking(byScope, availableForEditor, schedule as unknown as Array<{ subjectId: string; section: string }>);
+  }, [subjects, availableForEditor, subjectYearsForEditor, selectedYearEditor, showMine, enrollments, publicData]);
+
+  // warn when enrolled comisiones overlap each other in the week
+  const enrollmentOverlaps = useMemo(() => {
+    if (enrollments.size < 2) return [];
+    return findEnrollmentOverlaps(publicData?.schedule ?? [], enrollments);
+  }, [enrollments, publicData]);
+  const editorCodeOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of subjects) map.set(s.id, s.code);
+    return map;
+  }, [subjects]);
 
   const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
 
@@ -53,6 +68,26 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {userId ? (
+                <div role="group" aria-label="Alcance de materias" className="flex items-center rounded-lg border border-[var(--line)] p-0.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setEditorScope("mine")}
+                    aria-pressed={editorScope === "mine"}
+                    className={`rounded-md px-2.5 py-1 ${editorScope === "mine" ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
+                  >
+                    Cursando
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorScope("all")}
+                    aria-pressed={editorScope === "all"}
+                    className={`rounded-md px-2.5 py-1 ${editorScope === "all" ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
+                  >
+                    Todas
+                  </button>
+                </div>
+              ) : null}
               <label className="text-xs font-semibold text-[var(--muted)]">
                 Año
                 <select
@@ -78,8 +113,21 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
               ) : null}
             </div>
           </div>
+          {enrollmentOverlaps.length > 0 ? (
+            <div role="alert" className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:text-amber-200">
+              <p className="font-semibold">Estas comisiones se superponen en tu semana:</p>
+              <ul className="mt-1 list-disc pl-4">
+                {enrollmentOverlaps.map((o, i) => (
+                  <li key={`${o.day}-${i}`}>
+                    {editorCodeOf.get(o.a.subjectId) ?? o.a.subjectId} ({o.a.comisionId}) {dayLabel(o.a.day as Day)} {o.a.start}–{o.a.end} choca con{" "}
+                    {editorCodeOf.get(o.b.subjectId) ?? o.b.subjectId} ({o.b.comisionId}) {o.b.start}–{o.b.end}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {subjectsForEditor.length === 0 ? (
-            <p className="mt-3 text-xs text-[var(--muted)]">No hay comisiones configuradas para estas materias.</p>
+            <p className="mt-3 text-xs text-[var(--muted)]">{showMine ? "No estás cursando materias con este filtro. Cambia a Todas para elegir comisiones." : "No hay comisiones configuradas para estas materias."}</p>
           ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {subjectsForEditor.map((subject) => {

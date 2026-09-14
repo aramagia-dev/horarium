@@ -126,8 +126,15 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
     const currentSession = editingSchedule ? sessions.find((item) => item.id === editingSchedule) : null;
     const comisionChanged = (currentSession?.comision_id ?? null) !== candidateComision;
     const scheduleIntervalChanged = !currentSession || currentSession.day !== schedule.day || currentSession.start_time.slice(0, 5) !== schedule.start_time || currentSession.end_time.slice(0, 5) !== schedule.end_time || comisionChanged;
-    const overlaps = scheduleIntervalChanged && sessions.some((item) => item.id !== editingSchedule && item.day === schedule.day && isSameComision(item.comision_id ?? null, candidateComision) && timesOverlap(schedule.start_time, schedule.end_time, item.start_time, item.end_time));
-    if (overlaps) return setError("El horario se superpone con otra sesión del mismo día y comisión.");
+    const overlaps = scheduleIntervalChanged
+      ? sessions.find((item) => item.id !== editingSchedule && item.day === schedule.day && isSameComision(item.comision_id ?? null, candidateComision) && timesOverlap(schedule.start_time, schedule.end_time, item.start_time, item.end_time))
+      : undefined;
+    if (scheduleIntervalChanged && overlaps) {
+      const rel = overlaps.subjects;
+      const conflictName = (Array.isArray(rel) ? rel[0]?.name : rel?.name) ?? "otra sesión";
+      const conflictComision = overlaps.comision_id ? ` · ${overlaps.comision_id}` : "";
+      return setError(`El horario se superpone con ${conflictName} (${overlaps.start_time.slice(0, 5)}–${overlaps.end_time.slice(0, 5)}${conflictComision}).`);
+    }
     const value = { ...schedule, comision_id: candidateComision, professor_id: schedule.professor_id || null, room_id: schedule.room_id || null, section: schedule.section.trim() };
     const ok = await mutate(async () => editingSchedule ? await supabase!.from("schedules").update(value).eq("id", editingSchedule) : await supabase!.from("schedules").insert(value));
     if (ok) { setSchedule(emptySchedule); setEditingSchedule(null); }

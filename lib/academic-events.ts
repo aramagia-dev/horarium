@@ -289,7 +289,7 @@ export async function saveAcademicEvent(input: AcademicEventInput) {
     title,
     type: input.type,
     date: input.date,
-    time: input.time || null,
+    time: input.type === "feriado" ? null : input.time || null,
     subject_id: input.subject_id || null,
     description: input.description?.trim() || null,
     status: input.status,

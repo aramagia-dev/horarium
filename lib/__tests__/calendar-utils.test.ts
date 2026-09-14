@@ -3,6 +3,7 @@ import {
   startOfLocalDay,
   addLocalDays,
   getWeekStart,
+  getDisplayWeekStart,
   getInitialDay,
   dayForDate,
   isSameLocalDay,
@@ -78,5 +79,26 @@ describe("calendar-utils", () => {
     expect(parseDateInput("2026-02-30")).toBeNull();
     expect(parseDateInput("not-a-date")).toBeNull();
     expect(parseDateInput("2026-13-01")).toBeNull();
+  });
+
+  it("getDisplayWeekStart rolls Saturday to next Monday", () => {
+    const sat = new Date(2026, 7, 22); // Saturday 2026-08-22
+    const result = getDisplayWeekStart(sat);
+    expect(result.getDate()).toBe(24);
+    expect(result.getDay()).toBe(1);
+  });
+
+  it("getDisplayWeekStart rolls Sunday to next Monday", () => {
+    const sun = new Date(2026, 7, 23); // Sunday 2026-08-23
+    const result = getDisplayWeekStart(sun);
+    expect(result.getDate()).toBe(24);
+    expect(result.getDay()).toBe(1);
+  });
+
+  it("getDisplayWeekStart keeps weekday in same week", () => {
+    const wed = new Date(2026, 7, 19); // Wednesday 2026-08-19
+    const result = getDisplayWeekStart(wed);
+    expect(result.getDate()).toBe(17);
+    expect(result.getDay()).toBe(1);
   });
 });

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Ban, BookOpenCheck, CalendarDays, ClipboardCheck, Presentation, RotateCcw } from "lucide-react";
-import { addLocalDays, dayForDate, formatDateInput, formatDay, formatWeekHeading, formatWeekRange, getInitialDay, getWeekStart, isSameLocalDay, parseDateInput, startOfLocalDay } from "@/lib/calendar-utils";
+import { addLocalDays, dayForDate, formatDateInput, formatDay, formatWeekHeading, formatWeekRange, getDisplayWeekStart, getInitialDay, getWeekStart, isSameLocalDay, parseDateInput, startOfLocalDay } from "@/lib/calendar-utils";
 import type { AcademicEvent, AcademicEventType } from "@/lib/academic-events";
 import { days, minutesFromStart, timeSlots, timelineDisplayEnd, type Day, type ScheduleEntry } from "@/lib/schedule-data";
 import { hoverTransition, pageVariants, scheduleCardHover, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
@@ -29,12 +29,12 @@ export function getSessionEvents(entry: ScheduleEntry, date: Date, events: Acade
 
 export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent }: { schedule: ScheduleEntry[]; events: AcademicEvent[]; onSelectSubject: (subject: ScheduleEntry, date: Date) => void; onSelectEvent: (event: AcademicEvent) => void }) {
   const today = startOfLocalDay(new Date());
-  const [weekStart, setWeekStart] = useState(() => getWeekStart(today));
+  const [weekStart, setWeekStart] = useState(() => getDisplayWeekStart(today));
   const [activeDay, setActiveDay] = useState<Day>(() => getInitialDay(today));
   const weekDates = days.map((_, index) => addLocalDays(weekStart, index));
   const reduced = useReducedMotion();
   function moveWeek(amount: number) { setWeekStart((current) => addLocalDays(current, amount * 7)); }
-  function goToday() { const current = startOfLocalDay(new Date()); setWeekStart(getWeekStart(current)); setActiveDay(getInitialDay(current)); }
+  function goToday() { const current = startOfLocalDay(new Date()); setWeekStart(getDisplayWeekStart(current)); setActiveDay(getInitialDay(current)); }
   function selectDate(value: string) { const date = parseDateInput(value); if (!date) return; setWeekStart(getWeekStart(date)); setActiveDay(dayForDate(date)); }
 
   const [swipeDir, setSwipeDir] = useState(0);
@@ -316,12 +316,15 @@ function EventPreview({ events, onSelect, compact = false }: { events: AcademicE
       {events.map((event) => {
         const visual = eventVisuals[event.type];
         const Icon = visual.icon;
+        const isFeriado = event.type === "feriado";
+        const hideTitle = isFeriado && event.title.trim().toLowerCase() === visual.label.toLowerCase();
+        const timeLabel = !isFeriado && event.time ? event.time.slice(0, 5) : null;
         return (
           <button
             key={event.id}
             type="button"
             title={event.title}
-            aria-label={`Evento académico: ${visual.label}: ${event.title}${event.time ? `, ${event.time}` : ""}`}
+            aria-label={`Evento académico: ${visual.label}: ${event.title}${timeLabel ? `, ${timeLabel}` : ""}`}
             onClick={(click) => {
               click.stopPropagation();
               onSelect(event);
@@ -331,8 +334,8 @@ function EventPreview({ events, onSelect, compact = false }: { events: AcademicE
           >
             <Icon aria-hidden="true" size={13} className={`shrink-0 ${visual.color}`} />
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-[var(--muted)]">{visual.label}</span>
-            <span className="min-w-0 flex-1 truncate text-[var(--ink)]">{event.title}</span>
-            {event.time ? <span className="shrink-0 text-[9px] text-[var(--muted)]">{event.time}</span> : null}
+            {!hideTitle ? <span className="min-w-0 flex-1 truncate text-[var(--ink)]">{event.title}</span> : null}
+            {timeLabel ? <span className="shrink-0 text-[9px] text-[var(--muted)]">{timeLabel}</span> : null}
           </button>
         );
       })}

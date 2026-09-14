@@ -15,6 +15,12 @@ export function getWeekStart(date: Date) {
   return addLocalDays(date, day === 0 ? -6 : 1 - day);
 }
 
+export function getDisplayWeekStart(date: Date) {
+  const day = startOfLocalDay(date).getDay();
+  if (day === 6 || day === 0) return getWeekStart(addLocalDays(date, 7));
+  return getWeekStart(date);
+}
+
 export function getInitialDay(date: Date): Day {
   const weekday = startOfLocalDay(date).getDay();
   return weekday >= 1 && weekday <= 5 ? days[weekday - 1] : "Monday";

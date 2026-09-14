@@ -318,7 +318,7 @@ function EventPreview({ events, onSelect, compact = false }: { events: AcademicE
         const Icon = visual.icon;
         const isFeriado = event.type === "feriado";
         const hideTitle = isFeriado && event.title.trim().toLowerCase() === visual.label.toLowerCase();
-        const timeLabel = !isFeriado && event.time ? event.time.slice(0, 5) : null;
+        const timeLabel = event.time ? event.time.slice(0, 5) : null;
         return (
           <button
             key={event.id}
@@ -335,7 +335,6 @@ function EventPreview({ events, onSelect, compact = false }: { events: AcademicE
             <Icon aria-hidden="true" size={13} className={`shrink-0 ${visual.color}`} />
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-[var(--muted)]">{visual.label}</span>
             {!hideTitle ? <span className="min-w-0 flex-1 truncate text-[var(--ink)]">{event.title}</span> : null}
-            {timeLabel ? <span className="shrink-0 text-[9px] text-[var(--muted)]">{timeLabel}</span> : null}
           </button>
         );
       })}

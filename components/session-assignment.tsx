@@ -11,12 +11,12 @@ const inputCls =
   "mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)]";
 
 /**
- * Community completion of professor/room on a DB-backed session.
- * Rendered only for logged-in users on real schedule rows; the SQL trigger
- * guarantees nothing else on the row can change.
+ * Community completion of session data (professor / room / section) on a
+ * DB-backed session. Rendered only for logged-in users on real schedule
+ * rows; the SQL trigger guarantees nothing else on the row can change.
  */
 export function SessionAssignmentEditor({ session }: { session: ScheduleSession }) {
-  const { refresh } = useSchedule();
+  const { publicData, refresh } = useSchedule();
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [professorId, setProfessorId] = useState("");
@@ -26,6 +26,7 @@ export function SessionAssignmentEditor({ session }: { session: ScheduleSession 
   const [newRoomOpen, setNewRoomOpen] = useState(false);
   const [newProf, setNewProf] = useState("");
   const [newRoom, setNewRoom] = useState("");
+  const [section, setSection] = useState(session.section === "Sin asignar" ? "" : session.section);
   const [confirmedProf, setConfirmedProf] = useState("");
   const [confirmedRoom, setConfirmedRoom] = useState("");
   const [profWarning, setProfWarning] = useState<string[] | null>(null);
@@ -56,10 +57,19 @@ export function SessionAssignmentEditor({ session }: { session: ScheduleSession 
 
   function explainError(error: { code?: string; message: string }): string {
     if (error.code === "42501") return "No tenés permiso para guardar. Probá cerrar sesión y entrar de nuevo.";
-    if (error.code === "23505") return "Ese nombre ya existe en el catálogo; elegilo de la lista.";
+    if (error.code === "23505") return "Ya existe un registro igual (misma sesión o mismo nombre). Revisá los datos.";
     if (error.message.includes("Solo el administrador")) return error.message;
     return `No se pudo guardar. ${error.message}`;
   }
+
+  // Existing section labels on this subject, as typing suggestions.
+  const sectionSuggestions = (() => {
+    const seen = new Set<string>();
+    for (const entry of publicData?.schedule ?? []) {
+      if (entry.subjectId === session.subjectId && entry.section && entry.section !== "Sin asignar") seen.add(entry.section);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  })();
 
   async function resolveProfessorId(): Promise<{ id: string | null; blocked: boolean }> {
     const typed = newProfOpen ? newProf.trim() : "";
@@ -142,7 +152,11 @@ export function SessionAssignmentEditor({ session }: { session: ScheduleSession 
     }
     const { error } = await supabase!
       .from("schedules")
-      .update({ professor_id: prof.id, room_id: room.id })
+      .update({
+        professor_id: prof.id,
+        room_id: room.id,
+        ...(section.trim() && section.trim() !== session.section ? { section: section.trim() } : {}),
+      })
       .eq("id", session.id);
     setSaving(false);
     if (error) {
@@ -169,14 +183,31 @@ export function SessionAssignmentEditor({ session }: { session: ScheduleSession 
         }}
         className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline"
       >
-        Completar profesor / aula
+        Completar sesión
       </button>
     );
   }
 
   return (
     <div className="mt-2 rounded-lg border border-[var(--line)] p-2.5">
-      <div className="grid gap-2 sm:grid-cols-2">
+      <label className="text-xs font-semibold text-[var(--muted)]">
+        Sección
+        <input
+          value={section}
+          onChange={(e) => setSection(e.target.value)}
+          list={`section-suggestions-${session.id}`}
+          placeholder={session.section}
+          maxLength={60}
+          aria-label="Sección de la sesión"
+          className={inputCls}
+        />
+        <datalist id={`section-suggestions-${session.id}`}>
+          {sectionSuggestions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+      </label>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <label className="text-xs font-semibold text-[var(--muted)]">
           Profesor
           <select value={professorId} onChange={(e) => setProfessorId(e.target.value)} disabled={newProfOpen} className={`${inputCls} disabled:opacity-50`} aria-label="Profesor de la sesión">

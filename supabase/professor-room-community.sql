@@ -1,13 +1,13 @@
--- Community professor/room assignment.
+-- Community session completion (professor / room / section).
 --
 -- Lets any authenticated user complete missing data on schedule sessions:
 --   1. INSERT new professors and rooms (catalogue stays shared, duplicates
 --      are discouraged app-side with a "did you mean ...?" warning).
---   2. UPDATE professor_id / room_id on schedules rows.
+--   2. UPDATE professor_id / room_id / section on schedules rows.
 --
 -- Everything else stays admin-only. RLS alone cannot scope an UPDATE to a
 -- column subset, so a BEFORE UPDATE trigger rejects non-admin writes that
--- touch subject_id, day, times, section or comision_id.
+-- touch subject_id, day, times or comision_id.
 --
 -- Prerequisites: supabase/schema.sql and supabase/comisiones.sql
 -- (the trigger references schedules.comision_id).
@@ -30,12 +30,12 @@ create policy "Authenticated add rooms"
   on public.rooms for insert to authenticated with check (true);
 
 -- 3. Session assignment updates for any logged-in user. The trigger in
---    step 4 narrows this down to professor_id / room_id for non-admins.
+--    step 4 narrows this down to professor_id / room_id / section for non-admins.
 drop policy if exists "Authenticated assign session professor and room" on public.schedules;
 create policy "Authenticated assign session professor and room"
   on public.schedules for update to authenticated using (true) with check (true);
 
--- 4. Guard: non-admins may only change professor_id and room_id.
+-- 4. Guard: non-admins may only change professor_id, room_id and section.
 create or replace function public.schedules_community_guard()
 returns trigger
 language plpgsql
@@ -50,9 +50,8 @@ begin
     or old.day is distinct from new.day
     or old.start_time is distinct from new.start_time
     or old.end_time is distinct from new.end_time
-    or old.section is distinct from new.section
     or old.comision_id is distinct from new.comision_id then
-    raise exception 'Solo el administrador puede modificar materia, día, horario, sección o comisión. Podés cambiar profesor y aula.';
+    raise exception 'Solo el administrador puede modificar materia, día, horario o comisión. Podés cambiar profesor, aula y sección.';
   end if;
   return new;
 end;

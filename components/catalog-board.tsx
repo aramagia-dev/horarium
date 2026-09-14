@@ -21,6 +21,11 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const availableForEditor = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
   const subjectYearsForEditor = useMemo(() => getSubjectYears(availableForEditor), [availableForEditor]);
   const [selectedYearEditor, setSelectedYearEditor] = useState<"all" | "3" | "4">("all");
+  // Cursando (enrolled only, default) vs Todas — restored enrolled-only default
+  const [editorFilter, setEditorFilter] = useState<"cursando" | "todas">("cursando");
+  // Single-expand accordion: the expanded row shows the subject's sessions,
+  // absorbing the old bottom catalog grid into the same list.
+  const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
   // blocked comision changes: error only, no force — overlaps are never saved
   const [changeError, setChangeError] = useState<{ subjectId: string; comisionId: string; lines: string[] } | null>(null);
   const subjectsForEditor = useMemo(() => {
@@ -48,6 +53,22 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
     return map;
   }, [subjects]);
 
+  // Enrolled-only default: "Cursando" hides the rest to reduce clutter.
+  const editorSubjects = useMemo(
+    () => (editorFilter === "cursando" ? subjectsForEditor.filter((s) => enrollments.has(s.id)) : subjectsForEditor),
+    [subjectsForEditor, editorFilter, enrollments],
+  );
+
+  // Sessions shown inside an expanded row: the enrolled comision when there
+  // is one, legacy comision-less rows always, everything when not enrolled.
+  function sessionsForSubject(subjectId: string): ScheduleEntry[] {
+    const full = (publicData?.schedule ?? []) as ScheduleEntry[];
+    const enrolled = enrollments.get(subjectId);
+    return full.filter(
+      (entry) => entry.subjectId === subjectId && (!enrolled || entry.comisionId === enrolled || !entry.comisionId),
+    );
+  }
+
   function describeChangeConflicts(subjectId: string, comisionId: string): string[] {
     const hypo = new Map(enrollments);
     hypo.set(subjectId, comisionId);
@@ -60,6 +81,27 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
         const otherCode = editorCodeOf.get(other.subjectId) ?? other.subjectId;
         return `${dayLabel(mine.day as Day)} ${mine.start}–${mine.end} choca con ${otherCode} (${other.comisionId}) ${other.start}–${other.end}`;
       });
+  }
+
+  function handleEditorSelect(subjectId: string, value: string) {
+    if (!userId) return;
+    if (value === "__no__") {
+      setChangeError(null);
+      void removeEnrollment(subjectId);
+      return;
+    }
+    if (!value || value === enrollments.get(subjectId)) {
+      if (value === enrollments.get(subjectId)) setChangeError(null);
+      return;
+    }
+    const lines = describeChangeConflicts(subjectId, value);
+    if (lines.length > 0) {
+      // hard block: the select stays on the enrolled value
+      setChangeError({ subjectId, comisionId: value, lines });
+      return;
+    }
+    setChangeError(null);
+    void saveEnrollment(subjectId, value);
   }
 
   const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
@@ -80,6 +122,19 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <div role="group" aria-label="Filtro de materias" className="flex rounded-full border border-[var(--line)] p-0.5 text-xs font-semibold">
+                {(["cursando", "todas"] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setEditorFilter(f)}
+                    aria-pressed={editorFilter === f}
+                    className={`rounded-full px-3 py-1 transition ${editorFilter === f ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
+                  >
+                    {f === "cursando" ? `Cursando${enrollments.size > 0 ? ` (${enrollments.size})` : ""}` : "Todas"}
+                  </button>
+                ))}
+              </div>
               <label className="text-xs font-semibold text-[var(--muted)]">
                 Año
                 <select
@@ -126,60 +181,116 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
               </ul>
             </div>
           ) : null}
-          {subjectsForEditor.length === 0 ? (
+          {editorFilter === "cursando" && editorSubjects.length === 0 ? (
+            <div className="mt-3 rounded-xl border border-dashed border-[var(--line)] px-4 py-6 text-center">
+              <p className="text-xs text-[var(--muted)]">
+                {userId
+                  ? "No estás cursando ninguna materia todavía."
+                  : "Iniciá sesión para elegir tus comisiones."}
+              </p>
+              {userId && subjectsForEditor.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setEditorFilter("todas")}
+                  className="mt-2 rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  Ver todas y elegir
+                </button>
+              ) : null}
+            </div>
+          ) : subjectsForEditor.length === 0 ? (
             <p className="mt-3 text-xs text-[var(--muted)]">{userId ? "No hay comisiones configuradas para estas materias." : "Inicia sesión para ver tus materias."}</p>
           ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {subjectsForEditor.map((subject) => {
+            <ul className="mt-4 divide-y divide-[var(--line)] rounded-xl border border-[var(--line)]">
+              {editorSubjects.map((subject) => {
                 const opts = availableForEditor.get(subject.id) ?? [];
                 const selected = enrollments.get(subject.id) ?? "";
+                const expanded = expandedSubjectId === subject.id;
+                const sessions = expanded ? sessionsForSubject(subject.id) : [];
                 return (
-                  <label key={subject.id} className="flex flex-col gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--soft)]/20 px-3 py-3">
-                    <span className="text-xs font-semibold text-[var(--ink)]">{subject.code}</span>
-                    <span className="truncate text-[11px] text-[var(--muted)]">{subject.name}</span>
-                    <select
-                      value={selected}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!userId) return;
-                        if (val === "__no__") {
-                          setChangeError(null);
-                          void removeEnrollment(subject.id);
-                          return;
-                        }
-                        if (!val || val === enrollments.get(subject.id)) {
-                          if (val === enrollments.get(subject.id)) setChangeError(null);
-                          return;
-                        }
-                        const lines = describeChangeConflicts(subject.id, val);
-                        if (lines.length > 0) {
-                          // hard block: the select stays on the enrolled value
-                          setChangeError({ subjectId: subject.id, comisionId: val, lines });
-                          return;
-                        }
-                        setChangeError(null);
-                        void saveEnrollment(subject.id, val);
-                      }}
-                      disabled={!userId}
-                      aria-label={`Comisión de ${subject.code}`}
-                      className="mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] disabled:opacity-50"
-                    >
-                      <option value="">{userId ? "Seleccionar" : "Inicia sesión"}</option>
-                      <option value="__no__">No la curso</option>
-                      {opts.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <li key={subject.id} className="bg-[var(--soft)]/20">
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSubjectId(expanded ? null : subject.id)}
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? "Ocultar" : "Ver"} horarios de ${subject.code}`}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        <span aria-hidden="true" className="shrink-0 text-[10px] text-[var(--muted)]">{expanded ? "▾" : "▸"}</span>
+                        <span className="shrink-0 text-xs font-bold text-[var(--ink)]">{subject.code}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs text-[var(--muted)]">{subject.name}</span>
+                        {selected ? (
+                          <span className="shrink-0 rounded-full bg-[var(--accent)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--accent)]">{selected}</span>
+                        ) : null}
+                      </button>
+                      <select
+                        value={selected}
+                        onChange={(e) => handleEditorSelect(subject.id, e.target.value)}
+                        disabled={!userId}
+                        aria-label={`Comisión de ${subject.code}`}
+                        className="w-28 shrink-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-1.5 py-1.5 text-xs text-[var(--ink)] disabled:opacity-50 sm:w-32"
+                      >
+                        <option value="">{userId ? "Seleccionar" : "Inicia sesión"}</option>
+                        <option value="__no__">No la curso</option>
+                        {opts.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {expanded ? (
+                      <div className="border-t border-[var(--line)] px-3 py-2">
+                        {sessions.length === 0 ? (
+                          <p className="py-1 text-xs text-[var(--muted)]">Sin horarios cargados.</p>
+                        ) : (
+                          <ul className="divide-y divide-[var(--line)]/60">
+                            {sessions.map((entry) => (
+                              <li key={entry.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectSubject(entry)}
+                                  className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+                                >
+                                  <span className="min-w-0 text-xs text-[var(--ink)]">
+                                    {dayLabel(entry.day)} · {entry.start}–{entry.end} · {entry.section}
+                                    {entry.comisionId ? ` · ${entry.comisionId}` : ""}
+                                    <span className="block truncate text-[11px] text-[var(--muted)]">{entry.professor} · {entry.room}</span>
+                                  </span>
+                                  <span className="shrink-0 text-[11px] font-semibold text-[var(--accent)]">Abrir</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {LIVE_NOTES_ENABLED && sessions[0] ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectSubject(sessions[0]!);
+                              window.setTimeout(() => {
+                                document.getElementById("live-notes-cta")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                document.getElementById("live-notes-cta")?.focus();
+                              }, 250);
+                            }}
+                            aria-label={`Apuntes en vivo para ${subject.name}`}
+                            className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/15 focus-visible:outline-2 focus-visible:outline-amber-500"
+                          >
+                            ↗ Apuntes en vivo
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       ) : null}
-      {visibleGroups.length === 0 ? (
+      {kind !== "subjects" ? (
+        visibleGroups.length === 0 ? (
         <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] px-6 py-12 text-center">
           <p className="text-sm text-[var(--muted)]">{kind === "rooms" ? "No hay aulas con clases asignadas esta semana." : kind === "professors" ? "No hay docentes con clases asignadas esta semana." : "No hay materias para mostrar."}</p>
         </motion.div>
@@ -194,54 +305,21 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
               className="catalog-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
             >
               <p className="text-xs font-bold tracking-[0.12em] text-[var(--accent)] uppercase">{group.label}</p>
-              {kind === "subjects" && group.items[0] ? (
-                <>
-                  <motion.button
-                    type="button"
-                    whileHover={reduced ? undefined : { scale: 1.01 }}
-                    whileTap={reduced ? undefined : { scale: 0.99 }}
-                    onClick={() => onSelectSubject(group.items[0])}
-                    className="mt-3 w-full rounded-xl bg-[var(--background)] p-4 text-left transition hover:border-[var(--accent)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                  >
-                    <span className="text-[10px] font-bold tracking-[0.12em] text-[var(--muted)] uppercase">{group.items[0].code} · {Array.from(new Set(group.items.map((item) => item.section))).join(" · ")}</span>
-                    <strong className="mt-2 block break-words text-sm text-[var(--ink)]">{group.title}</strong>
-                    <span className="mt-2 block text-xs text-[var(--muted)]">{group.items.length} sesiones semanales</span>
-                  </motion.button>
-                  {LIVE_NOTES_ENABLED ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectSubject(group.items[0]!);
-                        // give the modal a tick to mount, then focus the live-notes CTA
-                        window.setTimeout(() => {
-                          document.getElementById("live-notes-cta")?.scrollIntoView({ behavior: "smooth", block: "center" });
-                          document.getElementById("live-notes-cta")?.focus();
-                        }, 250);
-                      }}
-                      aria-label={`Apuntes en vivo para ${group.title}`}
-                      className="mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/10 hover:text-amber-800 dark:text-amber-300 dark:hover:bg-amber-500/15 dark:hover:text-amber-200 focus-visible:outline-2 focus-visible:outline-amber-500"
-                    >
-                      ↗ Apuntes en vivo
+              <ul className="mt-3 space-y-2">
+                {group.items.map((entry) => (
+                  <li key={entry.id}>
+                    <button type="button" onClick={() => onSelectSubject(entry)} className="w-full rounded-lg px-2 py-2 text-left transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+                      <span className="block break-words text-sm font-semibold text-[var(--ink)]">{entry.subject}</span>
+                      <span className="block text-xs text-[var(--muted)]">{dayLabel(entry.day)} · {entry.start}–{entry.end} · {entry.section}</span>
                     </button>
-                  ) : null}
-                </>
-              ) : (
-                <ul className="mt-3 space-y-2">
-                  {group.items.map((entry) => (
-                    <li key={entry.id}>
-                      <button type="button" onClick={() => onSelectSubject(entry)} className="w-full rounded-lg px-2 py-2 text-left transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
-                        <span className="block break-words text-sm font-semibold text-[var(--ink)]">{entry.subject}</span>
-                        <span className="block text-xs text-[var(--muted)]">{dayLabel(entry.day)} · {entry.start}–{entry.end} · {entry.section}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                  </li>
+                ))}
+              </ul>
             </motion.article>
           ))}
         </motion.div>
-      )}
+        )
+      ) : null}
     </section>
   );
 }

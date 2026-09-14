@@ -9,7 +9,9 @@ import {
   getOnboardingPreselections,
   isOnboardingDismissed,
   setOnboardingDismissed,
+  setSavedOnboarding,
   shouldShowOnboarding,
+  sortSubjectsForPicking,
 } from "@/lib/enrollments";
 
 export function EnrollmentOnboarding() {
@@ -18,10 +20,11 @@ export function EnrollmentOnboarding() {
 
   const available = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
 
-  // only subjects that have at least one comision offering
+  // only subjects that have at least one comision offering, electives last
   const subjectsWithComisiones = useMemo(() => {
     const subs = publicData?.subjects ?? [];
-    return subs.filter((s) => available.has(s.id));
+    const filtered = subs.filter((s) => available.has(s.id));
+    return sortSubjectsForPicking(filtered, available);
   }, [publicData, available]);
 
   const preselected = useMemo(() => getOnboardingPreselections(available), [available]);
@@ -67,10 +70,16 @@ export function EnrollmentOnboarding() {
     setSaving(true);
     try {
       for (const [subjectId, comisionId] of selections) {
-        if (!comisionId) continue;
+        if (!comisionId || comisionId === "__no__") continue;
         await saveEnrollment(subjectId, comisionId);
       }
+      setSavedOnboarding(userId);
       setOnboardingDismissed(userId, true);
+      try {
+        window.dispatchEvent(new CustomEvent("horarium:saved-onboarding", { detail: { userId } }));
+      } catch {
+        // ignore
+      }
       setVisible(false);
     } finally {
       setSaving(false);
@@ -87,6 +96,7 @@ export function EnrollmentOnboarding() {
       <div className="w-full max-w-xl rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl">
         <h2 className="text-base font-semibold text-[var(--ink)]">Elige tus comisiones</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">Selecciona tu comisión para cada materia. Puedes cambiarlo luego en Mis materias.</p>
+        <p className="mt-2 text-xs text-[var(--muted)]">Las materias sin comisión no aparecen en tu calendario.</p>
 
         <div className="mt-4 max-h-[45vh] space-y-3 overflow-auto pr-1">
           {subjectsWithComisiones.map((subject) => {
@@ -104,8 +114,8 @@ export function EnrollmentOnboarding() {
                     const val = e.target.value;
                     setSelections((prev) => {
                       const next = new Map(prev);
-                      if (val) next.set(subject.id, val);
-                      else next.delete(subject.id);
+                      if (val === "") next.delete(subject.id);
+                      else next.set(subject.id, val);
                       return next;
                     });
                   }}
@@ -113,6 +123,7 @@ export function EnrollmentOnboarding() {
                   aria-label={`Comisión de ${subject.code}`}
                 >
                   <option value="">Seleccionar</option>
+                  <option value="__no__">No la curso</option>
                   {opts.map((c) => (
                     <option key={c} value={c}>
                       {c}

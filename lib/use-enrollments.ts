@@ -123,5 +123,36 @@ export function useEnrollments(userId: string | null) {
     }
   }, [userId]);
 
-  return { enrollments, loading: loading && !!userId, saveEnrollment, clearEnrollments, refresh };
+  const removeEnrollment = useCallback(
+    async (subjectId: string) => {
+      if (!subjectId) return;
+      setEnrollments((prev) => {
+        const next = new Map(prev);
+        next.delete(subjectId);
+        if (!supabaseConfigured || !supabase || !userId) {
+          saveLocalEnrollments(next);
+        } else {
+          try {
+            if (typeof window !== "undefined")
+              window.localStorage.setItem(LOCAL_SYNC_KEY, JSON.stringify(serializeEnrollments(next)));
+          } catch {
+            // ignore
+          }
+        }
+        return next;
+      });
+
+      if (!supabaseConfigured || !supabase || !userId) return;
+
+      try {
+        const { error } = await supabase.from("user_enrollments").delete().eq("user_id", userId).eq("subject_id", subjectId);
+        if (error) throw error;
+      } catch (e) {
+        console.warn("[horarium] removeEnrollment failed", e);
+      }
+    },
+    [userId],
+  );
+
+  return { enrollments, loading: loading && !!userId, saveEnrollment, clearEnrollments, removeEnrollment, refresh };
 }

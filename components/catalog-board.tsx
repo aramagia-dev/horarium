@@ -6,7 +6,7 @@ import { dayLabel, type CatalogProfessor, type CatalogRoom, type ScheduleEntry, 
 import { catalogCardHover, hoverTransition, pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 import { useSchedule } from "@/lib/schedule-context";
 import { useAuth } from "@/lib/auth-context";
-import { deriveAvailableComisiones } from "@/lib/enrollments";
+import { deriveAvailableComisiones, sortSubjectsForPicking } from "@/lib/enrollments";
 
 type CatalogKind = "subjects" | "professors" | "rooms";
 
@@ -16,10 +16,13 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const groups = kind === "subjects" ? subjects.map((subject) => ({ label: subject.code, title: subject.name, items: schedule.filter((entry) => entry.subjectId === subject.id), key: subject.id })) : kind === "professors" ? professors.map((professor) => ({ label: professor.display_name, title: professor.display_name, items: schedule.filter((entry) => entry.professor === professor.display_name), key: professor.id })) : rooms.map((room) => ({ label: room.name, title: room.name, items: schedule.filter((entry) => entry.room === room.name), key: room.id }));
   const visibleGroups = groups.filter((g) => g.items.length > 0);
   const reduced = useReducedMotion();
-  const { publicData, enrollments, saveEnrollment } = useSchedule();
+  const { publicData, enrollments, saveEnrollment, removeEnrollment } = useSchedule();
   const { userId } = useAuth();
   const availableForEditor = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
-  const subjectsForEditor = useMemo(() => subjects.filter((s) => availableForEditor.has(s.id)), [subjects, availableForEditor]);
+  const subjectsForEditor = useMemo(() => {
+    const filtered = subjects.filter((s) => availableForEditor.has(s.id));
+    return sortSubjectsForPicking(filtered, availableForEditor);
+  }, [subjects, availableForEditor]);
 
   const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
 
@@ -64,7 +67,12 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                       value={selected}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (!val || !userId) return;
+                        if (!userId) return;
+                        if (val === "__no__") {
+                          void removeEnrollment(subject.id);
+                          return;
+                        }
+                        if (!val) return;
                         void saveEnrollment(subject.id, val);
                       }}
                       disabled={!userId}
@@ -72,6 +80,7 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                       className="mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] disabled:opacity-50"
                     >
                       <option value="">{userId ? "Seleccionar" : "Inicia sesión"}</option>
+                      <option value="__no__">No la curso</option>
                       {opts.map((c) => (
                         <option key={c} value={c}>
                           {c}

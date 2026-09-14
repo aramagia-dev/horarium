@@ -16,6 +16,7 @@ type ScheduleContextValue = {
   enrollmentsLoading: boolean;
   saveEnrollment: (subjectId: string, comisionId: string) => Promise<void>;
   clearEnrollments: () => Promise<void>;
+  removeEnrollment: (subjectId: string) => Promise<void>;
   refreshEnrollments: () => Promise<void>;
 };
 
@@ -27,7 +28,7 @@ export function ScheduleProvider({ children, initialData }: { children: React.Re
   const requestId = useRef(0);
   const mounted = useRef(true);
   const { userId } = useAuth();
-  const { enrollments, loading: enrollmentsLoading, saveEnrollment, clearEnrollments, refresh: refreshEnrollments } = useEnrollments(userId);
+  const { enrollments, loading: enrollmentsLoading, saveEnrollment, clearEnrollments, removeEnrollment, refresh: refreshEnrollments } = useEnrollments(userId);
 
   const refresh = useCallback(() => {
     const id = ++requestId.current;
@@ -48,8 +49,8 @@ export function ScheduleProvider({ children, initialData }: { children: React.Re
   }, [initialData, refresh]);
 
   const value = useMemo(
-    () => ({ publicData, loading, refresh, enrollments, enrollmentsLoading, saveEnrollment, clearEnrollments, refreshEnrollments }),
-    [publicData, loading, refresh, enrollments, enrollmentsLoading, saveEnrollment, clearEnrollments, refreshEnrollments],
+    () => ({ publicData, loading, refresh, enrollments, enrollmentsLoading, saveEnrollment, clearEnrollments, removeEnrollment, refreshEnrollments }),
+    [publicData, loading, refresh, enrollments, enrollmentsLoading, saveEnrollment, clearEnrollments, removeEnrollment, refreshEnrollments],
   );
 
   return <ScheduleContext.Provider value={value}>{children}</ScheduleContext.Provider>;

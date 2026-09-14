@@ -16,6 +16,53 @@ export function getDismissedKey(userId: string): string {
   return `horarium:enrollments:dismissed:${userId}`;
 }
 
+export function getSavedOnboardingKey(userId: string): string {
+  return `horarium:enrollments:saved:${userId}`;
+}
+
+export function hasSavedOnboarding(userId: string | null | undefined): boolean {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    return window.localStorage.getItem(getSavedOnboardingKey(userId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setSavedOnboarding(userId: string): void {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    window.localStorage.setItem(getSavedOnboardingKey(userId), "1");
+  } catch {
+    // ignore
+  }
+}
+
+const ELECTIVE_COMISIONES = new Set<string>(["4K6", "4K7", "4K8"]);
+
+export function isElectiveComision(c: string): boolean {
+  return ELECTIVE_COMISIONES.has(c);
+}
+
+export function sortSubjectsForPicking<T extends { id: string }>(
+  subjects: T[],
+  available: Map<string, string[]>,
+): T[] {
+  const electiveOnly: T[] = [];
+  const others: T[] = [];
+  for (const subject of subjects) {
+    const comisiones = available.get(subject.id);
+    if (!comisiones || comisiones.length === 0) {
+      others.push(subject);
+      continue;
+    }
+    const onlyElective = comisiones.every((c) => isElectiveComision(c));
+    if (onlyElective) electiveOnly.push(subject);
+    else others.push(subject);
+  }
+  return [...others, ...electiveOnly];
+}
+
 export function serializeEnrollments(map: EnrollmentMap): Record<string, string> {
   const obj: Record<string, string> = {};
   for (const [k, v] of map) obj[k] = v;
@@ -104,8 +151,10 @@ export function getOnboardingPreselections(available: Map<string, string[]>): En
 export function getEnrolledSchedule<T extends SessionWithComision>(
   schedule: T[],
   enrollments: EnrollmentMap,
+  opts?: { emptyMeansAll?: boolean },
 ): T[] {
-  if (enrollments.size === 0) return schedule;
+  const emptyMeansAll = opts?.emptyMeansAll ?? true;
+  if (enrollments.size === 0) return emptyMeansAll ? schedule : [];
   return schedule.filter((entry) => {
     const cid = entry.comisionId ?? null;
     if (!cid) return true;
@@ -118,13 +167,15 @@ export function getEnrolledSchedule<T extends SessionWithComision>(
 export function isEventVisible(
   event: EventWithComision,
   enrollments: EnrollmentMap,
+  opts?: { emptyMeansAll?: boolean },
 ): boolean {
   // subject-less global events always visible
   if (!event.subject_id) return true;
   // global events (no comision) visible to everyone
   if (!event.comision_id) return true;
-  // empty enrollments fallback — show everything (backward compat)
-  if (enrollments.size === 0) return true;
+  const emptyMeansAll = opts?.emptyMeansAll ?? true;
+  // empty enrollments fallback — show everything when not onboarded (backward compat)
+  if (enrollments.size === 0) return emptyMeansAll ? true : false;
   const enrolled = enrollments.get(event.subject_id);
   if (enrolled === undefined) return false;
   return event.comision_id === enrolled;

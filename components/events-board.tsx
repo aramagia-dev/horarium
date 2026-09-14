@@ -70,7 +70,6 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   const [form, setForm] = useState<AcademicEventInput>(emptyForm);
   const [editing, setEditing] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>("pendientes");
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -156,7 +155,6 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
       setEditing(true);
       // Ensure new event will be visible
       setTypeFilter("all");
-      setStatusFilter("all");
       setSubjectFilter("all");
       setCompletionFilter("pendientes");
       setError("");
@@ -194,11 +192,10 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     return (events as EnrichedEvent[]).filter(
       (event) =>
         (typeFilter === "all" || event.type === typeFilter) &&
-        (statusFilter === "all" || event.status === statusFilter) &&
         (subjectFilter === "all" || event.subject_id === subjectFilter) &&
         isEventVisible({ subject_id: event.subject_id ?? null, comision_id: (event as unknown as { comision_id?: string | null }).comision_id ?? null }, enrollments),
     );
-  }, [events, statusFilter, subjectFilter, typeFilter, enrollments]);
+  }, [events, subjectFilter, typeFilter, enrollments]);
 
   const counts = useMemo(() => getCompletionCounts(otherFiltered as EnrichedEvent[]), [otherFiltered]);
 
@@ -235,7 +232,6 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         // Ensure visible filters so highlight can scroll into view
         setCompletionFilter("pendientes");
         setTypeFilter("all");
-        setStatusFilter("all");
         setSubjectFilter("all");
         try {
           window.localStorage.setItem(FILTER_STORAGE_KEY, "pendientes");
@@ -438,12 +434,9 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         })}
       </div>
 
-      <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="mb-5 grid gap-3 sm:grid-cols-3">
+      <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="mb-5 grid gap-3 sm:grid-cols-2">
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
           <select aria-label="Filtrar por tipo" className="admin-control" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}><option value="all">Todos los tipos</option>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select>
-        </motion.div>
-        <motion.div variants={withReducedMotion(staggerItem, reduced)}>
-          <select aria-label="Filtrar por estado" className="admin-control" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Todos los estados</option>{eventStatuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select>
         </motion.div>
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
           <select aria-label="Filtrar por materia" className="admin-control" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option value="all">Todas las materias</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code}</option>)}</select>
@@ -471,7 +464,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
           </motion.div>
         ) : (
           <motion.div
-            key={`${typeFilter}-${statusFilter}-${subjectFilter}-${completionFilter}`}
+            key={`${typeFilter}-${subjectFilter}-${completionFilter}`}
             variants={withReducedMotion(staggerContainer, reduced)}
             initial="hidden"
             animate="visible"

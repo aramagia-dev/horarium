@@ -4,7 +4,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.academic_events (
   id uuid primary key default gen_random_uuid(),
   title text not null check (char_length(trim(title)) between 1 and 160),
-  type text not null check (type in ('parcial', 'entrega', 'tarea', 'recuperatorio', 'exposición', 'otro')),
+  type text not null check (type in ('parcial', 'entrega', 'tarea', 'recuperatorio', 'exposición', 'feriado', 'otro')),
   date date not null,
   time time,
   subject_id text references public.subjects(id) on delete set null,
@@ -65,6 +65,27 @@ begin
   if not exists (select 1 from pg_constraint where conrelid = 'public.academic_events'::regclass and pg_get_constraintdef(oid) like '%tarea%') then
     begin
       execute 'alter table public.academic_events add constraint academic_events_type_check_tarea check (type in (''parcial'',''entrega'',''tarea'',''recuperatorio'',''exposición'',''otro''))';
+    exception when duplicate_object then null;
+    end;
+  end if;
+end $$;
+
+-- Migration for existing DBs that still have the old check without 'feriado'
+do $$
+declare
+  rec record;
+begin
+  for rec in select conname, oid from pg_constraint where conrelid = 'public.academic_events'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%type in%' loop
+    if pg_get_constraintdef(rec.oid) not like '%feriado%' then
+      begin
+        execute format('alter table public.academic_events drop constraint %I', rec.conname);
+      exception when others then null;
+      end;
+    end if;
+  end loop;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.academic_events'::regclass and pg_get_constraintdef(oid) like '%feriado%') then
+    begin
+      execute 'alter table public.academic_events add constraint academic_events_type_check_feriado check (type in (''parcial'',''entrega'',''tarea'',''recuperatorio'',''exposición'',''feriado'',''otro''))';
     exception when duplicate_object then null;
     end;
   end if;

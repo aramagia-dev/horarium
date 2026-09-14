@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarPlus, CheckCircle2, Users } from "lucide-react";
+import { Ban, CalendarPlus, CheckCircle2, Users } from "lucide-react";
 import {
   eventStatuses,
   eventTypes,
@@ -34,7 +34,7 @@ import {
   sortForTodos,
 } from "@/lib/event-completion-board";
 
-const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", tarea: "Tarea", recuperatorio: "Recuperatorio", exposición: "Exposición", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
+const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", tarea: "Tarea", recuperatorio: "Recuperatorio", exposición: "Exposición", feriado: "Sin clases", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
 const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, description: "", status: "pending", event_type: "individual" };
 
 type CompletionFilter = "pendientes" | "completados" | "todos" | "vencidos";
@@ -202,8 +202,9 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const isCreating = !form.id;
-    const snapshot = { ...form };
-    const result = await saveAcademicEvent(form);
+    const payload = form.type === "feriado" ? { ...form, event_type: "individual" as EventType } : form;
+    const snapshot = { ...payload };
+    const result = await saveAcademicEvent(payload);
     if (result.error) return setError(result.error);
     resetForm();
     const fresh = await loadAcademicEvents();
@@ -267,6 +268,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     async (event: EnrichedEvent) => {
       if (!userId) return;
       if (togglingId) return;
+      if (event.type === "feriado") return;
       const isGrupal = (event.event_type as EventType) === "grupal";
       const prev = events;
       const nowIso = new Date().toISOString();
@@ -353,18 +355,22 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-semibold text-[var(--muted)]">Título<input ref={titleInputRef} className="admin-control mt-1" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
-              <label className="text-xs font-semibold text-[var(--muted)]">Tipo<select className="admin-control mt-1" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as AcademicEventType })}>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label>
+              <label className="text-xs font-semibold text-[var(--muted)]">Tipo<select className="admin-control mt-1" value={form.type} onChange={(e) => { const nextType = e.target.value as AcademicEventType; setForm((prev) => ({ ...prev, type: nextType, ...(nextType === "feriado" ? { event_type: "individual" as EventType } : {}) })); }}>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Fecha<input className="admin-control mt-1" required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Hora opcional<input className="admin-control mt-1" type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Estado<select className="admin-control mt-1" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AcademicEventStatus })}>{eventStatuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select></label>
-              <label className="text-xs font-semibold text-[var(--muted)]">Modalidad
-                <div className="mt-1 flex gap-3">
-                  <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium has-[input:checked]:border-[var(--accent)] has-[input:checked]:bg-[var(--accent)]/10 has-[input:checked]:text-[var(--accent)]"><input type="radio" name="event_type" value="individual" checked={(form.event_type ?? "individual") === "individual"} onChange={() => setForm({ ...form, event_type: "individual" })} className="sr-only" />Individual</label>
-                  <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium has-[input:checked]:border-[var(--accent)] has-[input:checked]:bg-[var(--accent)]/10 has-[input:checked]:text-[var(--accent)]"><input type="radio" name="event_type" value="grupal" checked={form.event_type === "grupal"} onChange={() => setForm({ ...form, event_type: "grupal" })} className="sr-only" />Grupal</label>
-                </div>
-                <p className="mt-1 text-[10px] font-normal leading-3 text-[var(--muted)]">Individual: cada uno marca el suyo · Grupal: uno completa por todos</p>
-              </label>
+              {form.type !== "feriado" ? (
+                <label className="text-xs font-semibold text-[var(--muted)]">Modalidad
+                  <div className="mt-1 flex gap-3">
+                    <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium has-[input:checked]:border-[var(--accent)] has-[input:checked]:bg-[var(--accent)]/10 has-[input:checked]:text-[var(--accent)]"><input type="radio" name="event_type" value="individual" checked={(form.event_type ?? "individual") === "individual"} onChange={() => setForm({ ...form, event_type: "individual" })} className="sr-only" />Individual</label>
+                    <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium has-[input:checked]:border-[var(--accent)] has-[input:checked]:bg-[var(--accent)]/10 has-[input:checked]:text-[var(--accent)]"><input type="radio" name="event_type" value="grupal" checked={form.event_type === "grupal"} onChange={() => setForm({ ...form, event_type: "grupal" })} className="sr-only" />Grupal</label>
+                  </div>
+                  <p className="mt-1 text-[10px] font-normal leading-3 text-[var(--muted)]">Individual: cada uno marca el suyo · Grupal: uno completa por todos</p>
+                </label>
+              ) : (
+                <p className="mt-1 text-[10px] leading-3 text-[var(--muted)]">Evento informativo para toda la cursada — no se marca como completado.</p>
+              )}
               <label className="text-xs font-semibold text-[var(--muted)] sm:col-span-2">Descripción<textarea className="admin-control mt-1 min-h-20" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
             </div>
             <div className="mt-4 flex gap-3">
@@ -439,12 +445,13 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
               const isCompleted = Boolean(ee.isCompletedByMe);
               const isOverdue = isEventOverdue(event as AcademicEvent, isCompleted);
               const isGrupal = (ee.event_type as EventType) === "grupal";
+              const isFeriado = event.type === "feriado";
               const completers = (ee.completers ?? []) as Array<{ user_id: string; display_name: string | null; avatar_url: string | null; completed_at: string | null }>;
               const count = (ee.completedCount ?? completers.length) as number;
               const showAvatars = count > 0;
               const { visible: visibleAvatars, extra } = getVisibleAvatars(completers as unknown as import("@/lib/academic-events").Completer[], 3);
-              const titleClass = isCompleted ? "line-through decoration-2 opacity-70 text-[var(--muted)]" : "text-[var(--ink)]";
-              const cardExtra = isCompleted ? "opacity-60 bg-[var(--surface)] border-dashed" : "";
+              const titleClass = isCompleted && !isFeriado ? "line-through decoration-2 opacity-70 text-[var(--muted)]" : "text-[var(--ink)]";
+              const cardExtra = isFeriado ? "bg-amber-500/5 border-amber-300/30" : isCompleted ? "opacity-60 bg-[var(--surface)] border-dashed" : "";
               return (
                 <motion.article
                   key={event.id}
@@ -455,7 +462,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                   transition={hoverTransition}
                   onMouseEnter={selectedEventId && event.id !== selectedEventId ? () => onClearSelectedEvent?.() : undefined}
                   onFocus={selectedEventId && event.id !== selectedEventId ? () => onClearSelectedEvent?.() : undefined}
-                  className={`event-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border bg-[var(--surface)] p-4 sm:p-5 ${event.id === selectedEventId ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30" : isOverdue ? "border-rose-400/60" : "border-[var(--line)]"} ${cardExtra}`}
+                  className={`event-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border bg-[var(--surface)] p-4 sm:p-5 ${event.id === selectedEventId ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30" : isFeriado ? "border-amber-300/30" : isOverdue ? "border-rose-400/60" : "border-[var(--line)]"} ${cardExtra}`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex min-w-0 gap-3">
@@ -466,15 +473,15 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                       </div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className={`text-base font-semibold ${titleClass}`}>{event.title}</h2>
+                          <h2 className={`flex items-center gap-1.5 text-base font-semibold ${titleClass}`}>{isFeriado ? <Ban size={14} className="text-amber-600" aria-hidden="true" /> : null}{event.title}</h2>
                           <span className="rounded-full bg-[var(--soft)] px-2 py-1 text-[10px] font-bold text-[var(--accent)]">{labels[event.type]}</span>
-                          {isGrupal ? <span className="flex items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]"><Users size={10} aria-hidden="true" />Grupal</span> : null}
-                          {isCompleted ? <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-600"><CheckCircle2 size={10} aria-hidden="true" />Completado</span> : null}
+                          {!isFeriado && isGrupal ? <span className="flex items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]"><Users size={10} aria-hidden="true" />Grupal</span> : null}
+                          {!isFeriado && isCompleted ? <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-600"><CheckCircle2 size={10} aria-hidden="true" />Completado</span> : null}
                         </div>
                         <p className="mt-1 text-sm text-[var(--muted)]">{event.time ? `${event.time.slice(0, 5)} · ` : "Todo el día · "}{event.subject_code ?? "Sin materia"} · {labels[event.status]}{isOverdue ? " · Vencido" : ""}</p>
                         {event.description ? <p className="mt-2 text-sm leading-6 text-[var(--foreground)]">{event.description}</p> : null}
                         {/* Avatar stack — PR2 3.4 */}
-                        {showAvatars ? (
+                        {showAvatars && !isFeriado ? (
                           <button
                             type="button"
                             onClick={() => setDetailEvent(ee)}
@@ -498,11 +505,11 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                             </span>
                           </button>
                         ) : null}
-                        {!showAvatars && isGrupal && count === 0 ? <p className="mt-2 text-xs text-[var(--muted)]">Nadie completó aún</p> : null}
+                        {!showAvatars && !isFeriado && isGrupal && count === 0 ? <p className="mt-2 text-xs text-[var(--muted)]">Nadie completó aún</p> : null}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-3">
-                      {userId ? (
+                      {userId && !isFeriado ? (
                         <button
                           type="button"
                           disabled={togglingId === event.id}
@@ -555,28 +562,32 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                 <div>
                   <h3 className="text-base font-semibold text-[var(--ink)]">{detailEvent.title}</h3>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {(detailEvent.completedCount ?? 0) === 0 ? "0" : detailEvent.completedCount} completado{(detailEvent.completedCount ?? 0) !== 1 ? "s" : ""} · {detailEvent.event_type === "grupal" ? "Grupal — uno completa por todos" : "Individual"}
+                    {detailEvent.type === "feriado" ? "Evento informativo — no se marca como completado" : `${(detailEvent.completedCount ?? 0) === 0 ? "0" : detailEvent.completedCount} completado${(detailEvent.completedCount ?? 0) !== 1 ? "s" : ""} · ${detailEvent.event_type === "grupal" ? "Grupal — uno completa por todos" : "Individual"}`}
                   </p>
                 </div>
                 <button type="button" onClick={() => setDetailEvent(null)} aria-label="Cerrar" className="rounded-full bg-[var(--soft)] p-2 text-[var(--muted)] hover:text-[var(--ink)]">×</button>
               </div>
-              <ul className="mt-5 space-y-3">
-                {(detailEvent.completers ?? []).length === 0 ? (
-                  <li className="rounded-xl border border-dashed border-[var(--line)] p-4 text-center text-sm text-[var(--muted)]">Nadie completó aún</li>
-                ) : (
-                  (detailEvent.completers ?? []).map((c) => (
-                    <li key={c.user_id} className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--soft)]/40 px-3 py-2.5">
-                      <Avatar name={c.display_name ?? c.user_id} url={c.avatar_url} size={36} />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[var(--ink)]">
-                          {c.display_name ?? c.user_id.slice(0, 8)} {detailEvent.event_type === "grupal" ? <span className="font-normal text-[var(--muted)]">(grupal)</span> : null}
-                        </p>
-                        <p className="text-xs text-[var(--muted)]">{c.completed_at ? new Date(c.completed_at).toLocaleString("es-AR") : ""}</p>
-                      </div>
-                    </li>
-                  ))
-                )}
-              </ul>
+              {detailEvent.type === "feriado" ? (
+                <p className="mt-5 rounded-xl border border-amber-300/30 bg-amber-500/10 p-4 text-center text-sm text-amber-700 dark:text-amber-200">Evento informativo para toda la cursada — no se marca como completado.</p>
+              ) : (
+                <ul className="mt-5 space-y-3">
+                  {(detailEvent.completers ?? []).length === 0 ? (
+                    <li className="rounded-xl border border-dashed border-[var(--line)] p-4 text-center text-sm text-[var(--muted)]">Nadie completó aún</li>
+                  ) : (
+                    (detailEvent.completers ?? []).map((c) => (
+                      <li key={c.user_id} className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--soft)]/40 px-3 py-2.5">
+                        <Avatar name={c.display_name ?? c.user_id} url={c.avatar_url} size={36} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                            {c.display_name ?? c.user_id.slice(0, 8)} {detailEvent.event_type === "grupal" ? <span className="font-normal text-[var(--muted)]">(grupal)</span> : null}
+                          </p>
+                          <p className="text-xs text-[var(--muted)]">{c.completed_at ? new Date(c.completed_at).toLocaleString("es-AR") : ""}</p>
+                        </div>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
               <button type="button" onClick={() => setDetailEvent(null)} className="mt-5 w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white">Cerrar</button>
             </motion.div>
           </motion.div>

@@ -49,33 +49,24 @@ drop policy if exists "Owners delete academic events" on public.academic_events;
 create policy "Owners delete academic events" on public.academic_events for delete to authenticated
   using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') or created_by = auth.uid());
 
--- Migration for existing DBs that still have the old check without 'tarea'
+-- Migration for existing DBs: ensure only the feriado constraint remains.
+-- NOTE: Postgres stores CHECK (type IN (...)) as = ANY (ARRAY[...]),
+-- so matching '%type in%' never hits. Match '%parcial%' instead.
 do $$
 declare
   rec record;
 begin
-  for rec in select conname, oid from pg_constraint where conrelid = 'public.academic_events'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%type in%' loop
-    if pg_get_constraintdef(rec.oid) not like '%tarea%' then
-      begin
-        execute format('alter table public.academic_events drop constraint %I', rec.conname);
-      exception when others then null;
-      end;
-    end if;
-  end loop;
-  if not exists (select 1 from pg_constraint where conrelid = 'public.academic_events'::regclass and pg_get_constraintdef(oid) like '%tarea%') then
-    begin
-      execute 'alter table public.academic_events add constraint academic_events_type_check_tarea check (type in (''parcial'',''entrega'',''tarea'',''recuperatorio'',''exposición'',''otro''))';
-    exception when duplicate_object then null;
-    end;
-  end if;
-end $$;
-
--- Migration for existing DBs that still have the old check without 'feriado'
-do $$
-declare
-  rec record;
-begin
-  for rec in select conname, oid from pg_constraint where conrelid = 'public.academic_events'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%type in%' loop
+  -- Drop known legacy names first (fast path).
+  begin
+    execute 'alter table public.academic_events drop constraint if exists academic_events_type_check';
+  exception when others then null;
+  end;
+  begin
+    execute 'alter table public.academic_events drop constraint if exists academic_events_type_check_tarea';
+  exception when others then null;
+  end;
+  -- Drop any other residual type check lacking 'feriado' (covers auto-named variants).
+  for rec in select conname, oid from pg_constraint where conrelid = 'public.academic_events'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%parcial%' loop
     if pg_get_constraintdef(rec.oid) not like '%feriado%' then
       begin
         execute format('alter table public.academic_events drop constraint %I', rec.conname);
@@ -83,7 +74,7 @@ begin
       end;
     end if;
   end loop;
-  if not exists (select 1 from pg_constraint where conrelid = 'public.academic_events'::regclass and pg_get_constraintdef(oid) like '%feriado%') then
+  if not exists (select 1 from pg_constraint where conrelid = 'public.academic_events'::regclass and conname = 'academic_events_type_check_feriado') then
     begin
       execute 'alter table public.academic_events add constraint academic_events_type_check_feriado check (type in (''parcial'',''entrega'',''tarea'',''recuperatorio'',''exposición'',''feriado'',''otro''))';
     exception when duplicate_object then null;

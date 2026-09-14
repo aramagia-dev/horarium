@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Ban, CalendarPlus, CheckCircle2, Users } from "lucide-react";
 import {
+  canDeleteAcademicEvent,
   eventStatuses,
   eventTypes,
   formatEventDate,
@@ -78,6 +79,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   const canManage = isAdmin || !supabaseConfigured;
   const canCreate = canManage || Boolean(userId);
   const canEdit = (event: AcademicEvent) => canManage || (Boolean(userId) && event.created_by === userId);
+  const canDelete = (event: AcademicEvent) => canDeleteAcademicEvent(event, { isAdmin, userId });
   const reduced = useReducedMotion();
 
   // persist + restore completion filter (URL/storage else memory)
@@ -262,7 +264,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
       }
     }
   }
-  async function remove(event: AcademicEvent) { if (!window.confirm(`¿Eliminar «${event.title}»?`)) return; const result = await deleteAcademicEvent(event.id); if (result.error) setError(result.error); else { setEvents((current) => (current as EnrichedEvent[]).filter((item) => item.id !== event.id)); onDataChanged?.(); } }
+  async function remove(event: AcademicEvent) { if (!window.confirm(`¿Eliminar «${event.title}»?`)) return; const result = await deleteAcademicEvent(event.id, { isAdmin, userId, createdBy: event.created_by }); if (result.error) setError(result.error); else { setEvents((current) => (current as EnrichedEvent[]).filter((item) => item.id !== event.id)); onDataChanged?.(); } }
   async function markCompleted(event: AcademicEvent) { const result = await saveAcademicEvent({ ...event, status: "completed" }); if (result.error) setError(result.error); else { const fresh = await loadAcademicEvents(); setEvents(fresh.events); onDataChanged?.(); } }
 
   const handleToggle = useCallback(
@@ -529,7 +531,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                         <>
                           <button type="button" onClick={() => beginEdit(ee)} className="text-xs font-semibold text-[var(--accent)] hover:underline">Editar</button>
                           {event.status === "pending" ? <button type="button" onClick={() => void markCompleted(event)} className="text-xs font-semibold text-emerald-600 hover:underline">Marcar completado</button> : null}
-                          {canManage ? <button type="button" onClick={() => void remove(event)} className="text-xs font-semibold text-rose-500 hover:underline">Eliminar</button> : null}
+                          {canDelete(event) ? <button type="button" onClick={() => void remove(event)} className="text-xs font-semibold text-rose-500 hover:underline">Eliminar</button> : null}
                         </>
                       ) : null}
                     </div>

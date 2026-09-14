@@ -98,3 +98,60 @@ describe("academic-events — toggle idempotency & RLS isolate", () => {
     expect(res.error).toBe("Evento requerido.");
   });
 });
+
+describe("academic-events — delete permissions (author can delete own)", () => {
+  it("canDeleteAcademicEvent: isAdmin true allows delete regardless of created_by", async () => {
+    const { canDeleteAcademicEvent } = await import("@/lib/academic-events");
+    expect(canDeleteAcademicEvent({ created_by: null }, { isAdmin: true, userId: null })).toBe(true);
+    expect(canDeleteAcademicEvent({ created_by: "other" }, { isAdmin: true, userId: "me" })).toBe(true);
+    expect(canDeleteAcademicEvent(null, { isAdmin: true, userId: null })).toBe(true);
+  });
+
+  it("canDeleteAcademicEvent: author can delete own event", async () => {
+    const { canDeleteAcademicEvent } = await import("@/lib/academic-events");
+    expect(canDeleteAcademicEvent({ created_by: "user-1" }, { isAdmin: false, userId: "user-1" })).toBe(true);
+  });
+
+  it("canDeleteAcademicEvent: non-author cannot delete", async () => {
+    const { canDeleteAcademicEvent } = await import("@/lib/academic-events");
+    expect(canDeleteAcademicEvent({ created_by: "user-2" }, { isAdmin: false, userId: "user-1" })).toBe(false);
+  });
+
+  it("canDeleteAcademicEvent: NULL created_by stays admin-only", async () => {
+    const { canDeleteAcademicEvent } = await import("@/lib/academic-events");
+    expect(canDeleteAcademicEvent({ created_by: null }, { isAdmin: false, userId: "user-1" })).toBe(false);
+    expect(canDeleteAcademicEvent({ created_by: null }, { isAdmin: true, userId: "user-1" })).toBe(true);
+    expect(canDeleteAcademicEvent({ created_by: null }, { isAdmin: false, userId: null })).toBe(false);
+  });
+
+  it("canDeleteAcademicEvent: unauthenticated cannot delete", async () => {
+    const { canDeleteAcademicEvent } = await import("@/lib/academic-events");
+    expect(canDeleteAcademicEvent({ created_by: "user-1" }, { isAdmin: false, userId: null })).toBe(false);
+    expect(canDeleteAcademicEvent({ created_by: "user-1" }, { isAdmin: false, userId: "" })).toBe(false);
+  });
+
+  it("deleteAcademicEvent local mode: author can delete, non-author blocked, legacy NULL admin-only", async () => {
+    const { deleteAcademicEvent } = await import("@/lib/academic-events");
+    // In local mode (supabaseConfigured false) the permission check uses opts.createdBy
+    const okAuthor = await deleteAcademicEvent("any-id", { isAdmin: false, userId: "user-1", createdBy: "user-1" });
+    expect(okAuthor.error).toBe("");
+
+    const blocked = await deleteAcademicEvent("any-id", { isAdmin: false, userId: "user-1", createdBy: "user-2" });
+    expect(blocked.error).toBe("No tenés permiso para eliminar este evento.");
+
+    const legacyBlocked = await deleteAcademicEvent("any-id", { isAdmin: false, userId: "user-1", createdBy: null });
+    expect(legacyBlocked.error).toBe("No tenés permiso para eliminar este evento.");
+
+    const legacyAdminOk = await deleteAcademicEvent("any-id", { isAdmin: true, userId: "user-1", createdBy: null });
+    expect(legacyAdminOk.error).toBe("");
+
+    const unauthBlocked = await deleteAcademicEvent("any-id", { isAdmin: false, userId: null, createdBy: "user-1" });
+    expect(unauthBlocked.error).toBe("No tenés permiso para eliminar este evento.");
+  });
+
+  it("deleteAcademicEvent local mode: no opts skips check (backward compat)", async () => {
+    const { deleteAcademicEvent } = await import("@/lib/academic-events");
+    const res = await deleteAcademicEvent("any-id");
+    expect(res.error).toBe("");
+  });
+});

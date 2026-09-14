@@ -318,10 +318,37 @@ export async function saveAcademicEvent(input: AcademicEventInput) {
   return { error: "" };
 }
 
-export async function deleteAcademicEvent(id: string) {
+export function canDeleteAcademicEvent(
+  event: Pick<AcademicEvent, "created_by"> | null | undefined,
+  opts: { isAdmin?: boolean; userId?: string | null },
+): boolean {
+  if (opts.isAdmin) return true;
+  if (!opts.userId) return false;
+  if (!event?.created_by) return false;
+  return event.created_by === opts.userId;
+}
+
+export async function deleteAcademicEvent(
+  id: string,
+  opts?: { isAdmin?: boolean; userId?: string | null; createdBy?: string | null },
+) {
   if (!supabaseConfigured || !supabase) {
-    writeLocalEvents(readLocalEvents().filter((event) => event.id !== id));
+    const events = readLocalEvents();
+    const target = events.find((event) => event.id === id) ?? null;
+    if (opts) {
+      const eventForCheck: Pick<AcademicEvent, "created_by"> | null =
+        target ?? (typeof opts.createdBy !== "undefined" ? { created_by: opts.createdBy } : null);
+      if (!canDeleteAcademicEvent(eventForCheck, { isAdmin: opts.isAdmin, userId: opts.userId })) {
+        return { error: "No tenés permiso para eliminar este evento." };
+      }
+    }
+    writeLocalEvents(events.filter((event) => event.id !== id));
     return { error: "" };
+  }
+  if (opts && typeof opts.createdBy !== "undefined") {
+    if (!canDeleteAcademicEvent({ created_by: opts.createdBy }, { isAdmin: opts.isAdmin, userId: opts.userId })) {
+      return { error: "No tenés permiso para eliminar este evento." };
+    }
   }
   const result = await supabase.from("academic_events").delete().eq("id", id);
   if (result.error) return { error: result.error.message };

@@ -97,6 +97,15 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     for (const list of availableComisionesBySubject.values()) for (const c of list) all.add(c);
     return [...all].sort();
   }, [subjectFilter, availableComisionesBySubject]);
+  // Regular users pick from their enrolled subjects only, in the form and the
+  // filter. Admins — and users who haven't onboarded yet (no enrollments) —
+  // keep the full list. The current selection is always kept so editing never
+  // blanks the dropdown.
+  const visibleSubjects = useMemo(() => {
+    if (isAdmin || enrollments.size === 0) return subjects;
+    const keep = new Set([form.subject_id, subjectFilter].filter((v): v is string => Boolean(v)));
+    return subjects.filter((s) => enrollments.has(s.id) || keep.has(s.id));
+  }, [subjects, enrollments, isAdmin, form.subject_id, subjectFilter]);
 
   // persist + restore completion filter (URL/storage else memory)
   useEffect(() => {
@@ -401,7 +410,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
               <label className="text-xs font-semibold text-[var(--muted)]">Tipo<select className="admin-control mt-1" value={form.type} onChange={(e) => { const nextType = e.target.value as AcademicEventType; setForm((prev) => ({ ...prev, type: nextType, ...(nextType === "feriado" ? { event_type: "individual" as EventType } : {}) })); }}>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Fecha<input className="admin-control mt-1" required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
               {form.type !== "feriado" ? <label className="text-xs font-semibold text-[var(--muted)]">Hora opcional<input className="admin-control mt-1" type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label> : null}
-              <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, comision_id: null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
+              <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, comision_id: null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{visibleSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
               {form.type !== "feriado" && form.subject_id && formSubjectComisiones.length > 0 ? (
                 <label className="text-xs font-semibold text-[var(--muted)]">Comisión<select className="admin-control mt-1" value={form.comision_id ?? ""} onChange={(e) => setForm({ ...form, comision_id: e.target.value || null })}><option value="">Todas</option>{formSubjectComisiones.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
               ) : null}
@@ -451,7 +460,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
           <select aria-label="Filtrar por tipo" className="admin-control" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}><option value="all">Todos los tipos</option>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select>
         </motion.div>
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
-          <select aria-label="Filtrar por materia" className="admin-control" value={subjectFilter} onChange={(e) => { setSubjectFilter(e.target.value); setComisionFilter("all"); }}><option value="all">Todas las materias</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code}</option>)}</select>
+          <select aria-label="Filtrar por materia" className="admin-control" value={subjectFilter} onChange={(e) => { setSubjectFilter(e.target.value); setComisionFilter("all"); }}><option value="all">Todas las materias</option>{visibleSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code}</option>)}</select>
         </motion.div>
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
           <select aria-label="Filtrar por comisión" className="admin-control" value={comisionFilter} onChange={(e) => setComisionFilter(e.target.value)} disabled={filterComisiones.length === 0}><option value="all">Todas las comisiones</option>{filterComisiones.map((c) => <option key={c} value={c}>{c}</option>)}</select>

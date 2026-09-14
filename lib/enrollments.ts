@@ -44,10 +44,49 @@ export function isElectiveComision(c: string): boolean {
   return ELECTIVE_COMISIONES.has(c);
 }
 
+export function getComisionYear(c: string | null | undefined): string {
+  if (typeof c !== "string" || c.length === 0) return "";
+  return c.charAt(0) ?? "";
+}
+
+export function getSubjectYears(available: Map<string, string[]>): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const [sid, comisiones] of available.entries()) {
+    const years = new Set<string>();
+    for (const c of comisiones) {
+      const y = getComisionYear(c);
+      if (y) years.add(y);
+    }
+    out.set(sid, Array.from(years).sort());
+  }
+  return out;
+}
+
 export function sortSubjectsForPicking<T extends { id: string }>(
   subjects: T[],
   available: Map<string, string[]>,
+  sessionsOrSections?: Map<string, string[] | Set<string>> | Array<{ subjectId?: string; subject_id?: string; section: string }>,
 ): T[] {
+  let sectionsBySubject: Map<string, Set<string>> | undefined;
+  if (Array.isArray(sessionsOrSections)) {
+    sectionsBySubject = new Map<string, Set<string>>();
+    for (const s of sessionsOrSections as Array<{ subjectId?: string; subject_id?: string; section: string }>) {
+      const sid = (s.subjectId ?? s.subject_id) as string | undefined;
+      const sec = s.section;
+      if (!sid || !sec) continue;
+      const set = sectionsBySubject.get(sid) ?? new Set<string>();
+      set.add(sec);
+      sectionsBySubject.set(sid, set);
+    }
+  } else if (sessionsOrSections instanceof Map) {
+    sectionsBySubject = new Map<string, Set<string>>();
+    for (const [k, v] of (sessionsOrSections as Map<string, string[] | Set<string>>).entries()) {
+      if (v instanceof Set) sectionsBySubject.set(k, new Set(v as Set<string>));
+      else if (Array.isArray(v)) sectionsBySubject.set(k, new Set(v as string[]));
+      else sectionsBySubject.set(k, new Set<string>());
+    }
+  }
+
   const electiveOnly: T[] = [];
   const others: T[] = [];
   for (const subject of subjects) {
@@ -56,7 +95,17 @@ export function sortSubjectsForPicking<T extends { id: string }>(
       others.push(subject);
       continue;
     }
-    const onlyElective = comisiones.every((c) => isElectiveComision(c));
+    let onlyElective: boolean;
+    if (sectionsBySubject) {
+      const sections = sectionsBySubject.get(subject.id);
+      if (!sections || sections.size === 0) {
+        onlyElective = false;
+      } else {
+        onlyElective = Array.from(sections).every((sec) => sec === "Electivas");
+      }
+    } else {
+      onlyElective = comisiones.every((c) => isElectiveComision(c));
+    }
     if (onlyElective) electiveOnly.push(subject);
     else others.push(subject);
   }

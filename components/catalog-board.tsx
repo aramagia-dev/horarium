@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { dayLabel, type CatalogProfessor, type CatalogRoom, type ScheduleEntry, type Subject } from "@/lib/schedule-data";
 import { catalogCardHover, hoverTransition, pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 import { useSchedule } from "@/lib/schedule-context";
 import { useAuth } from "@/lib/auth-context";
-import { deriveAvailableComisiones, sortSubjectsForPicking } from "@/lib/enrollments";
+import { deriveAvailableComisiones, getSubjectYears, sortSubjectsForPicking } from "@/lib/enrollments";
 
 type CatalogKind = "subjects" | "professors" | "rooms";
 
@@ -19,10 +19,21 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const { publicData, enrollments, saveEnrollment, removeEnrollment } = useSchedule();
   const { userId } = useAuth();
   const availableForEditor = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
+  const subjectYearsForEditor = useMemo(() => getSubjectYears(availableForEditor), [availableForEditor]);
+  const [selectedYearEditor, setSelectedYearEditor] = useState<"all" | "3" | "4">("all");
   const subjectsForEditor = useMemo(() => {
     const filtered = subjects.filter((s) => availableForEditor.has(s.id));
-    return sortSubjectsForPicking(filtered, availableForEditor);
-  }, [subjects, availableForEditor]);
+    const byYear =
+      selectedYearEditor === "all"
+        ? filtered
+        : filtered.filter((s) => {
+            const years = subjectYearsForEditor.get(s.id);
+            if (!years || years.length === 0) return false;
+            return years.includes(selectedYearEditor);
+          });
+    const schedule = publicData?.schedule ?? [];
+    return sortSubjectsForPicking(byYear, availableForEditor, schedule as unknown as Array<{ subjectId: string; section: string }>);
+  }, [subjects, availableForEditor, subjectYearsForEditor, selectedYearEditor, publicData]);
 
   const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
 
@@ -41,16 +52,31 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                 {userId ? "Selecciona tu comisión por materia. El calendario se actualiza inmediatamente." : "Inicia sesión para seleccionar tus comisiones."}
               </p>
             </div>
-            {userId && subjectsForEditor.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("horarium:reopen-onboarding"))}
-                className="hidden text-xs font-semibold text-[var(--accent)] hover:underline sm:block"
-                title="Reabrir configuración inicial"
-              >
-                Configurar
-              </button>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-[var(--muted)]">
+                Año
+                <select
+                  value={selectedYearEditor}
+                  onChange={(e) => setSelectedYearEditor(e.target.value as "all" | "3" | "4")}
+                  className="ml-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)]"
+                  aria-label="Año"
+                >
+                  <option value="all">Todas</option>
+                  <option value="3">3er año</option>
+                  <option value="4">4to año</option>
+                </select>
+              </label>
+              {userId && subjectsForEditor.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent("horarium:reopen-onboarding"))}
+                  className="hidden text-xs font-semibold text-[var(--accent)] hover:underline sm:block"
+                  title="Reabrir configuración inicial"
+                >
+                  Configurar
+                </button>
+              ) : null}
+            </div>
           </div>
           {subjectsForEditor.length === 0 ? (
             <p className="mt-3 text-xs text-[var(--muted)]">No hay comisiones configuradas para estas materias.</p>

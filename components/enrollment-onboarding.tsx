@@ -7,6 +7,7 @@ import { useSchedule } from "@/lib/schedule-context";
 import {
   deriveAvailableComisiones,
   getOnboardingPreselections,
+  getSubjectYears,
   isOnboardingDismissed,
   setOnboardingDismissed,
   setSavedOnboarding,
@@ -19,13 +20,21 @@ export function EnrollmentOnboarding() {
   const { publicData, enrollments, saveEnrollment } = useSchedule();
 
   const available = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
+  const subjectYears = useMemo(() => getSubjectYears(available), [available]);
+  const [selectedYear, setSelectedYear] = useState<"3" | "4">("4");
 
-  // only subjects that have at least one comision offering, electives last
+  // only subjects that have at least one comision offering, electives last, filtered by year
   const subjectsWithComisiones = useMemo(() => {
     const subs = publicData?.subjects ?? [];
     const filtered = subs.filter((s) => available.has(s.id));
-    return sortSubjectsForPicking(filtered, available);
-  }, [publicData, available]);
+    const byYear = filtered.filter((s) => {
+      const years = subjectYears.get(s.id);
+      if (!years || years.length === 0) return false;
+      return years.includes(selectedYear);
+    });
+    const schedule = publicData?.schedule ?? [];
+    return sortSubjectsForPicking(byYear, available, schedule as unknown as Array<{ subjectId: string; section: string }>);
+  }, [publicData, available, subjectYears, selectedYear]);
 
   const preselected = useMemo(() => getOnboardingPreselections(available), [available]);
 
@@ -97,6 +106,20 @@ export function EnrollmentOnboarding() {
         <h2 className="text-base font-semibold text-[var(--ink)]">Elige tus comisiones</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">Selecciona tu comisión para cada materia. Puedes cambiarlo luego en Mis materias.</p>
         <p className="mt-2 text-xs text-[var(--muted)]">Las materias sin comisión no aparecen en tu calendario.</p>
+        <div className="mt-3">
+          <label className="text-xs font-semibold text-[var(--muted)]">
+            Año
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value as "3" | "4")}
+              className="ml-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-sm text-[var(--ink)]"
+              aria-label="Año"
+            >
+              <option value="3">3er año</option>
+              <option value="4">4to año</option>
+            </select>
+          </label>
+        </div>
 
         <div className="mt-4 max-h-[45vh] space-y-3 overflow-auto pr-1">
           {subjectsWithComisiones.map((subject) => {

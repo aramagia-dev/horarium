@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarCheck2, CalendarDays, Clock3, GraduationCap, House, MapPin, Menu, Moon, NotebookPen, PanelLeft, PanelLeftClose, Settings, Sun, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -27,6 +27,9 @@ import { backdropVariants, drawerVariants, pageVariants, useReducedMotion } from
 
 type View = "home" | "schedule" | "events" | "notes" | "subjects" | "professors" | "rooms" | "settings" | "admin";
 type NavItem = { view: View; icon: LucideIcon; label: string };
+// The calendar is always personal: logged-out users and accounts without
+// enrollment see an empty calendar. Nobody gets the merged global view.
+const emptyMeansAll = false;
 const themeKey = "horarium:theme";
 const baseNavItems: NavItem[] = [
   { view: "home", icon: House, label: "Inicio" }, { view: "schedule", icon: CalendarDays, label: "Horario" },
@@ -80,11 +83,18 @@ export default function AppShell() {
   // logged-out users and accounts without enrollment see an empty calendar.
   // Nobody gets the merged global view anymore.
   const dataReady = !authLoading && !enrollmentsLoading;
-  const emptyMeansAll = false;
-  const rawSchedule = dataReady ? (publicData?.schedule ?? []) : [];
-  const schedule = getEnrolledSchedule(rawSchedule, enrollments, { emptyMeansAll });
-  const visibleEventsForCalendar = (dataReady ? (publicData?.events ?? []) : []).filter((e) =>
-    isEventVisible({ subject_id: e.subject_id, comision_id: e.comision_id ?? null }, enrollments, { emptyMeansAll }),
+  // Memoized: getEnrolledSchedule/filter return a NEW array every call, and a
+  // fresh prop identity makes boards (notas, eventos…) refetch on every
+  // header/notification re-render. Only recompute when the inputs change.
+  const schedule = useMemo(
+    () => (dataReady ? getEnrolledSchedule(publicData?.schedule ?? [], enrollments, { emptyMeansAll }) : []),
+    [dataReady, publicData, enrollments],
+  );
+  const visibleEventsForCalendar = useMemo(
+    () => (dataReady ? (publicData?.events ?? []) : []).filter((e) =>
+      isEventVisible({ subject_id: e.subject_id, comision_id: e.comision_id ?? null }, enrollments, { emptyMeansAll }),
+    ),
+    [dataReady, publicData, enrollments],
   );
   const navItems = isAdmin ? [...baseNavItems, { view: "admin" as const, icon: Wrench, label: "Administración" }] : baseNavItems;
 

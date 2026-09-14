@@ -6,6 +6,7 @@ import { dayLabel, type CatalogProfessor, type CatalogRoom, type Day, type Sched
 import { catalogCardHover, hoverTransition, pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 import { useSchedule } from "@/lib/schedule-context";
 import { useAuth } from "@/lib/auth-context";
+import { AddSubjectDialog } from "@/components/add-subject-dialog";
 import { deriveAvailableComisiones, findEnrollmentOverlaps, getSubjectYears, sortSubjectsForPicking } from "@/lib/enrollments";
 
 type CatalogKind = "subjects" | "professors" | "rooms";
@@ -21,25 +22,26 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const availableForEditor = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
   const subjectYearsForEditor = useMemo(() => getSubjectYears(availableForEditor), [availableForEditor]);
   const [selectedYearEditor, setSelectedYearEditor] = useState<"all" | "3" | "4">("all");
-  // default view: only the subjects the user is taking; "all" reveals the rest.
-  const [editorScope, setEditorScope] = useState<"mine" | "all">("mine");
-  const showMine = editorScope === "mine" && Boolean(userId);
+  const [addOpen, setAddOpen] = useState(false);
+  // changing a comision is blocked on conflicts until confirmed with "cambiar igual"
+  const [pendingChange, setPendingChange] = useState<{ subjectId: string; comisionId: string; lines: string[] } | null>(null);
+  // the panel only lists enrolled subjects; the rest is added through the dialog
   const subjectsForEditor = useMemo(() => {
-    const filtered = subjects.filter((s) => availableForEditor.has(s.id));
+    if (!userId) return [];
+    const enrolled = subjects.filter((s) => availableForEditor.has(s.id) && enrollments.has(s.id));
     const byYear =
       selectedYearEditor === "all"
-        ? filtered
-        : filtered.filter((s) => {
+        ? enrolled
+        : enrolled.filter((s) => {
             const years = subjectYearsForEditor.get(s.id);
             if (!years || years.length === 0) return false;
             return years.includes(selectedYearEditor);
           });
-    const byScope = showMine ? byYear.filter((s) => enrollments.has(s.id)) : byYear;
     const schedule = publicData?.schedule ?? [];
-    return sortSubjectsForPicking(byScope, availableForEditor, schedule as unknown as Array<{ subjectId: string; section: string }>);
-  }, [subjects, availableForEditor, subjectYearsForEditor, selectedYearEditor, showMine, enrollments, publicData]);
+    return sortSubjectsForPicking(byYear, availableForEditor, schedule as unknown as Array<{ subjectId: string; section: string }>);
+  }, [subjects, availableForEditor, subjectYearsForEditor, selectedYearEditor, userId, enrollments, publicData]);
 
-  // warn when enrolled comisiones overlap each other in the week
+  // pre-existing overlaps (e.g. forced earlier) are informational; new changes block
   const enrollmentOverlaps = useMemo(() => {
     if (enrollments.size < 2) return [];
     return findEnrollmentOverlaps(publicData?.schedule ?? [], enrollments);
@@ -49,6 +51,20 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
     for (const s of subjects) map.set(s.id, s.code);
     return map;
   }, [subjects]);
+
+  function describeChangeConflicts(subjectId: string, comisionId: string): string[] {
+    const hypo = new Map(enrollments);
+    hypo.set(subjectId, comisionId);
+    const sched = publicData?.schedule ?? [];
+    return findEnrollmentOverlaps(sched, hypo)
+      .filter((o) => o.a.subjectId === subjectId || o.b.subjectId === subjectId)
+      .map((o) => {
+        const other = o.a.subjectId === subjectId ? o.b : o.a;
+        const mine = o.a.subjectId === subjectId ? o.a : o.b;
+        const otherCode = editorCodeOf.get(other.subjectId) ?? other.subjectId;
+        return `${dayLabel(mine.day as Day)} ${mine.start}–${mine.end} choca con ${otherCode} (${other.comisionId}) ${other.start}–${other.end}`;
+      });
+  }
 
   const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
 
@@ -64,29 +80,18 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
             <div>
               <h2 className="text-sm font-semibold text-[var(--ink)]">Mis materias</h2>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                {userId ? "Selecciona tu comisión por materia. El calendario se actualiza inmediatamente." : "Inicia sesión para seleccionar tus comisiones."}
+                {userId ? "Las que cursás. El calendario se actualiza inmediatamente." : "Inicia sesión para seleccionar tus comisiones."}
               </p>
             </div>
             <div className="flex items-center gap-2">
               {userId ? (
-                <div role="group" aria-label="Alcance de materias" className="flex items-center rounded-lg border border-[var(--line)] p-0.5 text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => setEditorScope("mine")}
-                    aria-pressed={editorScope === "mine"}
-                    className={`rounded-md px-2.5 py-1 ${editorScope === "mine" ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
-                  >
-                    Cursando
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditorScope("all")}
-                    aria-pressed={editorScope === "all"}
-                    className={`rounded-md px-2.5 py-1 ${editorScope === "all" ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
-                  >
-                    Todas
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setAddOpen(true)}
+                  className="rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  ＋ Agregar materia
+                </button>
               ) : null}
               <label className="text-xs font-semibold text-[var(--muted)]">
                 Año
@@ -101,19 +106,50 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                   <option value="4">4to año</option>
                 </select>
               </label>
-              {userId && subjectsForEditor.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => window.dispatchEvent(new CustomEvent("horarium:reopen-onboarding"))}
-                  className="hidden text-xs font-semibold text-[var(--accent)] hover:underline sm:block"
-                  title="Reabrir configuración inicial"
-                >
-                  Configurar
-                </button>
+              {userId && addOpen ? (
+                <AddSubjectDialog
+                  open={addOpen}
+                  onClose={() => setAddOpen(false)}
+                  subjects={subjects}
+                  schedule={publicData?.schedule ?? []}
+                  enrollments={enrollments}
+                  onAdd={(subjectId, comisionId) => saveEnrollment(subjectId, comisionId)}
+                />
               ) : null}
             </div>
           </div>
-          {enrollmentOverlaps.length > 0 ? (
+          {pendingChange ? (
+            <div role="alert" className="mt-4 rounded-xl border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-xs leading-5 text-red-800 dark:text-red-200">
+              <p className="font-semibold">
+                No se puede cambiar a {editorCodeOf.get(pendingChange.subjectId)} ({pendingChange.comisionId}): se superpone con tu semana.
+              </p>
+              <ul className="mt-1 list-disc pl-4">
+                {pendingChange.lines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!userId) return;
+                    void saveEnrollment(pendingChange.subjectId, pendingChange.comisionId);
+                    setPendingChange(null);
+                  }}
+                  className="rounded-full bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  Cambiar igual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingChange(null)}
+                  className="rounded-full px-3.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : enrollmentOverlaps.length > 0 ? (
             <div role="alert" className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:text-amber-200">
               <p className="font-semibold">Estas comisiones se superponen en tu semana:</p>
               <ul className="mt-1 list-disc pl-4">
@@ -127,12 +163,13 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
             </div>
           ) : null}
           {subjectsForEditor.length === 0 ? (
-            <p className="mt-3 text-xs text-[var(--muted)]">{showMine ? "No estás cursando materias con este filtro. Cambia a Todas para elegir comisiones." : "No hay comisiones configuradas para estas materias."}</p>
+            <p className="mt-3 text-xs text-[var(--muted)]">{userId ? "Todavía no cursás ninguna materia. Tocá Agregar materia para elegir tus comisiones." : "Inicia sesión para ver tus materias."}</p>
           ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {subjectsForEditor.map((subject) => {
                 const opts = availableForEditor.get(subject.id) ?? [];
-                const selected = enrollments.get(subject.id) ?? "";
+                const pending = pendingChange?.subjectId === subject.id ? pendingChange.comisionId : null;
+                const selected = pending ?? enrollments.get(subject.id) ?? "";
                 return (
                   <label key={subject.id} className="flex flex-col gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--soft)]/20 px-3 py-3">
                     <span className="text-xs font-semibold text-[var(--ink)]">{subject.code}</span>
@@ -143,10 +180,20 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                         const val = e.target.value;
                         if (!userId) return;
                         if (val === "__no__") {
+                          setPendingChange(null);
                           void removeEnrollment(subject.id);
                           return;
                         }
-                        if (!val) return;
+                        if (!val || val === enrollments.get(subject.id)) {
+                          if (val === enrollments.get(subject.id)) setPendingChange(null);
+                          return;
+                        }
+                        const lines = describeChangeConflicts(subject.id, val);
+                        if (lines.length > 0) {
+                          setPendingChange({ subjectId: subject.id, comisionId: val, lines });
+                          return;
+                        }
+                        setPendingChange(null);
                         void saveEnrollment(subject.id, val);
                       }}
                       disabled={!userId}

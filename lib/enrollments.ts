@@ -49,6 +49,26 @@ export function getComisionYear(c: string | null | undefined): string {
   return c.charAt(0) ?? "";
 }
 
+/**
+ * Subjects whose every session is in the "Electivas" section.
+ * Used to offer the obligatoria/electiva filter in the add-subject flow.
+ */
+export function getElectiveOnlySubjectIds(sessions: Array<{ subjectId?: string; subject_id?: string; section: string }>): Set<string> {
+  const sectionsBySubject = new Map<string, Set<string>>();
+  for (const s of sessions) {
+    const sid = (s.subjectId ?? s.subject_id) as string | undefined;
+    if (!sid || !s.section) continue;
+    const set = sectionsBySubject.get(sid) ?? new Set<string>();
+    set.add(s.section);
+    sectionsBySubject.set(sid, set);
+  }
+  const out = new Set<string>();
+  for (const [sid, sections] of sectionsBySubject) {
+    if (sections.size > 0 && Array.from(sections).every((sec) => sec === "Electivas")) out.add(sid);
+  }
+  return out;
+}
+
 export function getSubjectYears(available: Map<string, string[]>): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const [sid, comisiones] of available.entries()) {

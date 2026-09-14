@@ -38,6 +38,8 @@ import {
   type ScheduleSession,
 } from "@/lib/schedule-data";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
+import { isDbSessionId } from "@/lib/session-catalog";
+import { SessionAssignmentEditor } from "@/components/session-assignment";
 import { motion } from "framer-motion";
 import { hoverTransition, staggerContainer, staggerItem, subtleCardHover, useReducedMotion } from "@/lib/motion";
 
@@ -1357,6 +1359,7 @@ export function SubjectModal({
                       <span className="text-xs text-[var(--muted)]">{session.section}</span>
                     </div>
                     <p className="mt-1 text-xs text-[var(--muted)]">{session.professor} · {session.room}</p>
+                    {supabaseConfigured && userId && isDbSessionId(session.id) ? <SessionAssignmentEditor session={session} /> : null}
                   </div>
                 ))}
               </div>

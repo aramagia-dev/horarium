@@ -21,6 +21,8 @@ import { isEventOverdue, type AcademicEvent, type EnrichedEvent } from "@/lib/ac
 import { formatDateInput } from "@/lib/calendar-utils";
 import { useAuth } from "@/lib/auth-context";
 import { useSchedule } from "@/lib/schedule-context";
+import { getEnrolledSchedule, isEventVisible } from "@/lib/enrollments";
+import { EnrollmentOnboarding } from "@/components/enrollment-onboarding";
 import { backdropVariants, drawerVariants, pageVariants, useReducedMotion } from "@/lib/motion";
 
 type View = "home" | "schedule" | "events" | "notes" | "subjects" | "professors" | "rooms" | "settings" | "admin";
@@ -43,7 +45,7 @@ export default function AppShell() {
   const [notesFocus, setNotesFocus] = useState<{ subjectId: string | null; noteId: string | null; commentId: string | null } | null>(null);
   const [dark, setDark] = useState(false);
   const { isAdmin, userId } = useAuth();
-  const { publicData, refresh: refreshPublicData } = useSchedule();
+  const { publicData, refresh: refreshPublicData, enrollments } = useSchedule();
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -73,7 +75,9 @@ export default function AppShell() {
     window.localStorage.setItem(themeKey, next ? "dark" : "light");
   }
 
-  const schedule = publicData?.schedule ?? [];
+  const rawSchedule = publicData?.schedule ?? [];
+  const schedule = getEnrolledSchedule(rawSchedule, enrollments);
+  const visibleEventsForCalendar = (publicData?.events ?? []).filter((e) => isEventVisible({ subject_id: e.subject_id, comision_id: e.comision_id ?? null }, enrollments));
   const navItems = isAdmin ? [...baseNavItems, { view: "admin" as const, icon: Wrench, label: "Administración" }] : baseNavItems;
 
   function navigate(nextView: View) { setView(nextView); setDrawerOpen(false); }
@@ -176,12 +180,13 @@ export default function AppShell() {
             exit="exit"
             className="min-w-0 max-w-full overflow-x-hidden"
           >
-            {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={publicData.events} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex w-full max-w-full min-w-0 items-center gap-2 no-scrollbar overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 sm:max-w-5xl"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{[...publicData.events].filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? "")).slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{publicData.events.filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).length === 0 && publicData.events.filter((e) => e.status !== "cancelled").length > 0 ? <span className="text-xs text-[var(--muted)]">¡Estás al día!</span> : publicData.events.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={publicData.events} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} onClearSelectedEvent={() => setSelectedEventId(null)} /> : view === "notes" ? <NotesBoard schedule={schedule} focus={notesFocus} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
+            {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={visibleEventsForCalendar} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex w-full max-w-full min-w-0 items-center gap-2 no-scrollbar overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 sm:max-w-5xl"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{[...visibleEventsForCalendar].filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? "")).slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{visibleEventsForCalendar.filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).length === 0 && visibleEventsForCalendar.filter((e) => e.status !== "cancelled").length > 0 ? <span className="text-xs text-[var(--muted)]">¡Estás al día!</span> : visibleEventsForCalendar.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={visibleEventsForCalendar} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} onClearSelectedEvent={() => setSelectedEventId(null)} /> : view === "notes" ? <NotesBoard schedule={schedule} focus={notesFocus} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
           </motion.div>
         </AnimatePresence>
       </div>
     </div>
       {selectedSubject ? <SubjectModal subject={selectedSubject} sessions={schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId)} date={selectedDate ?? undefined} prefillDate={selectedDate ? formatDateInput(selectedDate) : undefined} prefillTime={selectedSubject.start.slice(0, 5)} subjectIdForEvent={selectedSubject.subjectId} legacyEntryIds={[...schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id), ...scheduleSessions.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id)]} onClose={() => { setSelectedSubject(null); setSelectedDate(null); }} onOpenNotes={() => { setSelectedSubject(null); setSelectedDate(null); setView("notes"); }} /> : null}
+      <EnrollmentOnboarding />
   </main>;
 }
 

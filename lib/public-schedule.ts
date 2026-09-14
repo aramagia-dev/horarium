@@ -34,7 +34,7 @@ export async function loadPublicSchedule(): Promise<PublicScheduleState> {
     supabase.from("subjects").select("id, code, name, accent").order("code"),
     supabase.from("professors").select("id, display_name").order("display_name"),
     supabase.from("rooms").select("id, name").order("name"),
-    supabase.from("schedules").select("id, subject_id, day, start_time, end_time, section, subjects(id, code, name, accent), professors(display_name), rooms(name)").order("day").order("start_time"),
+    supabase.from("schedules").select("id, subject_id, comision_id, day, start_time, end_time, section, subjects(id, code, name, accent), professors(display_name), rooms(name)").order("day").order("start_time"),
     loadAcademicEvents(),
   ]);
   const error = [subjectsResult, professorsResult, roomsResult, schedulesResult].find((result) => result.error)?.error;

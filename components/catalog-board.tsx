@@ -1,8 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { dayLabel, type CatalogProfessor, type CatalogRoom, type ScheduleEntry, type Subject } from "@/lib/schedule-data";
 import { catalogCardHover, hoverTransition, pageVariants, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { useSchedule } from "@/lib/schedule-context";
+import { useAuth } from "@/lib/auth-context";
+import { deriveAvailableComisiones } from "@/lib/enrollments";
 
 type CatalogKind = "subjects" | "professors" | "rooms";
 
@@ -12,6 +16,10 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
   const groups = kind === "subjects" ? subjects.map((subject) => ({ label: subject.code, title: subject.name, items: schedule.filter((entry) => entry.subjectId === subject.id), key: subject.id })) : kind === "professors" ? professors.map((professor) => ({ label: professor.display_name, title: professor.display_name, items: schedule.filter((entry) => entry.professor === professor.display_name), key: professor.id })) : rooms.map((room) => ({ label: room.name, title: room.name, items: schedule.filter((entry) => entry.room === room.name), key: room.id }));
   const visibleGroups = groups.filter((g) => g.items.length > 0);
   const reduced = useReducedMotion();
+  const { publicData, enrollments, saveEnrollment } = useSchedule();
+  const { userId } = useAuth();
+  const availableForEditor = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
+  const subjectsForEditor = useMemo(() => subjects.filter((s) => availableForEditor.has(s.id)), [subjects, availableForEditor]);
 
   const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
 
@@ -21,6 +29,62 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
         <h1 className="text-[22px] font-bold tracking-[-0.03em] text-[var(--ink)]">{title}</h1>
         <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{description}</p>
       </motion.div>
+      {kind === "subjects" ? (
+        <div className="mb-8 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--ink)]">Mis materias</h2>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {userId ? "Selecciona tu comisión por materia. El calendario se actualiza inmediatamente." : "Inicia sesión para seleccionar tus comisiones."}
+              </p>
+            </div>
+            {userId && subjectsForEditor.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("horarium:reopen-onboarding"))}
+                className="hidden text-xs font-semibold text-[var(--accent)] hover:underline sm:block"
+                title="Reabrir configuración inicial"
+              >
+                Configurar
+              </button>
+            ) : null}
+          </div>
+          {subjectsForEditor.length === 0 ? (
+            <p className="mt-3 text-xs text-[var(--muted)]">No hay comisiones configuradas para estas materias.</p>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {subjectsForEditor.map((subject) => {
+                const opts = availableForEditor.get(subject.id) ?? [];
+                const selected = enrollments.get(subject.id) ?? "";
+                return (
+                  <label key={subject.id} className="flex flex-col gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--soft)]/20 px-3 py-3">
+                    <span className="text-xs font-semibold text-[var(--ink)]">{subject.code}</span>
+                    <span className="truncate text-[11px] text-[var(--muted)]">{subject.name}</span>
+                    <select
+                      value={selected}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val || !userId) return;
+                        void saveEnrollment(subject.id, val);
+                      }}
+                      disabled={!userId}
+                      aria-label={`Comisión de ${subject.code}`}
+                      className="mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] disabled:opacity-50"
+                    >
+                      <option value="">{userId ? "Seleccionar" : "Inicia sesión"}</option>
+                      {opts.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
       {visibleGroups.length === 0 ? (
         <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] px-6 py-12 text-center">
           <p className="text-sm text-[var(--muted)]">{kind === "rooms" ? "No hay aulas con clases asignadas esta semana." : kind === "professors" ? "No hay docentes con clases asignadas esta semana." : "No hay materias para mostrar."}</p>

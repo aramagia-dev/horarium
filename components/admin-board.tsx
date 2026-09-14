@@ -9,17 +9,19 @@ import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { days, scheduleSessions as localScheduleSessions, subjects as localSubjects, type Accent, type Day } from "@/lib/schedule-data";
 import { hoverTransition, pageVariants, staggerContainer, staggerItem, subtleCardHover, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { isSameComision } from "@/lib/enrollments";
+import { DEFAULT_COMISIONES, loadComisiones } from "@/lib/comisiones";
 
 type Subject = { id: string; code: string; name: string; accent: Accent };
 type Professor = { id: string; display_name: string; normalized_name: string };
 type Room = { id: string; name: string };
 type Relation<T> = T | T[] | null;
-type Session = { id: string; subject_id: string; professor_id: string | null; room_id: string | null; day: Day; section: string; start_time: string; end_time: string; subjects?: Relation<{ name: string }>; professors?: Relation<{ display_name: string }>; rooms?: Relation<{ name: string }> };
+type Session = { id: string; subject_id: string; professor_id: string | null; room_id: string | null; comision_id: string | null; day: Day; section: string; start_time: string; end_time: string; subjects?: Relation<{ name: string }>; professors?: Relation<{ display_name: string }>; rooms?: Relation<{ name: string }> };
 
 const emptySubject = { id: "", code: "", name: "", accent: "violet" as Accent };
 const emptyProfessor = { display_name: "" };
 const emptyRoom = { name: "" };
-const emptySchedule = { subject_id: "", professor_id: "", room_id: "", day: "Monday" as Day, section: "", start_time: "", end_time: "" };
+const emptySchedule = { subject_id: "", professor_id: "", room_id: "", comision_id: "", day: "Monday" as Day, section: "", start_time: "", end_time: "" };
 
 export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
   const { isAdmin, loading: authLoading } = useAuth();
@@ -28,6 +30,7 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [comisiones, setComisiones] = useState<Array<{ id: string; label: string; shift: string }>>(DEFAULT_COMISIONES);
   const [subject, setSubject] = useState(emptySubject);
   const [professor, setProfessor] = useState(emptyProfessor);
   const [room, setRoom] = useState(emptyRoom);
@@ -50,7 +53,7 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
       supabase.from("subjects").select("id, code, name, accent").order("code"),
       supabase.from("professors").select("id, display_name, normalized_name").order("display_name"),
       supabase.from("rooms").select("id, name").order("name"),
-      supabase.from("schedules").select("id, subject_id, professor_id, room_id, day, section, start_time, end_time, subjects(name), professors(display_name), rooms(name)").order("day").order("start_time"),
+      supabase.from("schedules").select("id, subject_id, professor_id, room_id, comision_id, day, section, start_time, end_time, subjects(name), professors(display_name), rooms(name)").order("day").order("start_time"),
     ]);
     const resultError = [subjectsResult, professorsResult, roomsResult, schedulesResult].find((result) => result.error)?.error;
     if (resultError) setError(serverError(resultError.message, resultError.code));
@@ -59,6 +62,12 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
       setProfessors((professorsResult.data ?? []) as Professor[]);
       setRooms((roomsResult.data ?? []) as Room[]);
       setSessions((schedulesResult.data ?? []) as Session[]);
+    }
+    try {
+      const loaded = await loadComisiones();
+      setComisiones(loaded);
+    } catch {
+      setComisiones(DEFAULT_COMISIONES);
     }
     setLoading(false);
   }
@@ -113,11 +122,13 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
   async function saveSchedule(event: FormEvent) {
     event.preventDefault();
     if (!schedule.subject_id || !schedule.section.trim() || !schedule.start_time || !schedule.end_time || schedule.end_time <= schedule.start_time) return setError("Completá la materia, sección y un intervalo horario válido.");
+    const candidateComision = schedule.comision_id || null;
     const currentSession = editingSchedule ? sessions.find((item) => item.id === editingSchedule) : null;
-    const scheduleIntervalChanged = !currentSession || currentSession.day !== schedule.day || currentSession.start_time.slice(0, 5) !== schedule.start_time || currentSession.end_time.slice(0, 5) !== schedule.end_time;
-    const overlaps = scheduleIntervalChanged && sessions.some((item) => item.id !== editingSchedule && item.day === schedule.day && timesOverlap(schedule.start_time, schedule.end_time, item.start_time, item.end_time));
-    if (overlaps) return setError("El horario se superpone con otra sesión del mismo día.");
-    const value = { ...schedule, professor_id: schedule.professor_id || null, room_id: schedule.room_id || null, section: schedule.section.trim() };
+    const comisionChanged = (currentSession?.comision_id ?? null) !== candidateComision;
+    const scheduleIntervalChanged = !currentSession || currentSession.day !== schedule.day || currentSession.start_time.slice(0, 5) !== schedule.start_time || currentSession.end_time.slice(0, 5) !== schedule.end_time || comisionChanged;
+    const overlaps = scheduleIntervalChanged && sessions.some((item) => item.id !== editingSchedule && item.day === schedule.day && isSameComision(item.comision_id ?? null, candidateComision) && timesOverlap(schedule.start_time, schedule.end_time, item.start_time, item.end_time));
+    if (overlaps) return setError("El horario se superpone con otra sesión del mismo día y comisión.");
+    const value = { ...schedule, comision_id: candidateComision, professor_id: schedule.professor_id || null, room_id: schedule.room_id || null, section: schedule.section.trim() };
     const ok = await mutate(async () => editingSchedule ? await supabase!.from("schedules").update(value).eq("id", editingSchedule) : await supabase!.from("schedules").insert(value));
     if (ok) { setSchedule(emptySchedule); setEditingSchedule(null); }
   }
@@ -159,7 +170,7 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
   }
 
   function editSchedule(item: Session) {
-    setSchedule({ subject_id: item.subject_id, professor_id: item.professor_id ?? "", room_id: item.room_id ?? "", day: item.day, section: item.section, start_time: item.start_time.slice(0, 5), end_time: item.end_time.slice(0, 5) });
+    setSchedule({ subject_id: item.subject_id, professor_id: item.professor_id ?? "", room_id: item.room_id ?? "", comision_id: item.comision_id ?? "", day: item.day, section: item.section, start_time: item.start_time.slice(0, 5), end_time: item.end_time.slice(0, 5) });
     setEditingSchedule(item.id);
     setError("");
     setSuccess("");
@@ -210,7 +221,7 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
       </motion.div>
       <motion.div variants={withReducedMotion(pageVariants, reduced)} initial="initial" animate="animate" className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_12px_30px_rgb(15_23_42/0.04)] sm:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--accent)]">Tarea principal</p><h2 className="mt-1 text-xl font-semibold text-[var(--ink)]">Sesiones del horario</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">Creá sesiones y editá la asignación de profesor o aula por materia.</p></div><span className="rounded-full bg-[var(--background)] px-3 py-1 text-xs font-semibold text-[var(--muted)]">{sessions.length} registradas</span></div>
-        <form onSubmit={saveSchedule} className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4 sm:p-5"><div className="mb-4"><h3 className="text-base font-semibold text-[var(--ink)]">{editingSchedule ? "Editar asignación" : "Nueva sesión"}</h3><p className="mt-1 text-xs leading-5 text-[var(--muted)]">El profesor y el aula se guardan en esta sesión, no en la materia.</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="Materia"><select className="admin-control" required value={schedule.subject_id} onChange={(event) => setSchedule({ ...schedule, subject_id: event.target.value })}><option value="">Seleccionar</option>{subjects.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></Field><Field label="Profesor de esta sesión"><select className="admin-control" value={schedule.professor_id} onChange={(event) => setSchedule({ ...schedule, professor_id: event.target.value })}><option value="">Sin asignar</option>{professors.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}</select></Field><Field label="Aula de esta sesión"><select className="admin-control" value={schedule.room_id} onChange={(event) => setSchedule({ ...schedule, room_id: event.target.value })}><option value="">Sin asignar</option>{rooms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Día"><select className="admin-control" value={schedule.day} onChange={(event) => setSchedule({ ...schedule, day: event.target.value as Day })}>{days.map((item) => <option key={item} value={item}>{dayLabel(item)}</option>)}</select></Field><Field label="Sección"><input className="admin-control" required value={schedule.section} onChange={(event) => setSchedule({ ...schedule, section: event.target.value })} /></Field><Field label="Inicio"><input className="admin-control" required type="time" value={schedule.start_time} onChange={(event) => setSchedule({ ...schedule, start_time: event.target.value })} /></Field><Field label="Fin"><input className="admin-control" required type="time" value={schedule.end_time} onChange={(event) => setSchedule({ ...schedule, end_time: event.target.value })} /></Field></div><div className="mt-5 flex flex-wrap items-center gap-3"><button type="submit" disabled={pending} className="rounded-lg bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60">{pending ? "Guardando..." : editingSchedule ? "Guardar asignación" : "Agregar sesión"}</button>{editingSchedule ? <CancelButton onClick={cancelEdits} /> : null}</div></form>
+        <form onSubmit={saveSchedule} className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4 sm:p-5"><div className="mb-4"><h3 className="text-base font-semibold text-[var(--ink)]">{editingSchedule ? "Editar asignación" : "Nueva sesión"}</h3><p className="mt-1 text-xs leading-5 text-[var(--muted)]">El profesor y el aula se guardan en esta sesión, no en la materia.</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="Materia"><select className="admin-control" required value={schedule.subject_id} onChange={(event) => setSchedule({ ...schedule, subject_id: event.target.value })}><option value="">Seleccionar</option>{subjects.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></Field><Field label="Profesor de esta sesión"><select className="admin-control" value={schedule.professor_id} onChange={(event) => setSchedule({ ...schedule, professor_id: event.target.value })}><option value="">Sin asignar</option>{professors.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}</select></Field><Field label="Aula de esta sesión"><select className="admin-control" value={schedule.room_id} onChange={(event) => setSchedule({ ...schedule, room_id: event.target.value })}><option value="">Sin asignar</option>{rooms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Comisión"><select className="admin-control" value={schedule.comision_id} onChange={(event) => setSchedule({ ...schedule, comision_id: event.target.value })}><option value="">Sin comisión</option>{comisiones.map((item) => <option key={item.id} value={item.id}>{item.label}{item.shift ? ` · ${item.shift}` : ""}</option>)}</select></Field><Field label="Día"><select className="admin-control" value={schedule.day} onChange={(event) => setSchedule({ ...schedule, day: event.target.value as Day })}>{days.map((item) => <option key={item} value={item}>{dayLabel(item)}</option>)}</select></Field><Field label="Sección"><input className="admin-control" required value={schedule.section} onChange={(event) => setSchedule({ ...schedule, section: event.target.value })} /></Field><Field label="Inicio"><input className="admin-control" required type="time" value={schedule.start_time} onChange={(event) => setSchedule({ ...schedule, start_time: event.target.value })} /></Field><Field label="Fin"><input className="admin-control" required type="time" value={schedule.end_time} onChange={(event) => setSchedule({ ...schedule, end_time: event.target.value })} /></Field></div><div className="mt-5 flex flex-wrap items-center gap-3"><button type="submit" disabled={pending} className="rounded-lg bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60">{pending ? "Guardando..." : editingSchedule ? "Guardar asignación" : "Agregar sesión"}</button>{editingSchedule ? <CancelButton onClick={cancelEdits} /> : null}</div></form>
         {sessions.length === 0 ? <div className="mt-5 rounded-xl border border-dashed border-[var(--line)] bg-[var(--background)] p-5"><h3 className="text-sm font-semibold text-[var(--ink)]">Todavía no hay sesiones compartidas</h3><p className="mt-1 max-w-xl text-sm leading-6 text-[var(--muted)]">Podés importar las 11 sesiones del horario local para empezar a editar sus asignaciones.</p><button type="button" onClick={() => void importLocalSchedule()} disabled={pending} className="mt-4 rounded-lg border border-[var(--accent)] bg-transparent px-4 py-2.5 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:opacity-60">{pending ? "Importando..." : "Importar horario local (11 sesiones)"}</button></div> : <div className="mt-6"><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-[var(--ink)]">Asignaciones por materia</h3><span className="text-xs text-[var(--muted)]">Editá cada fila</span></div>
         <motion.div variants={withReducedMotion(staggerContainer, reduced)} initial="hidden" animate="visible" className="space-y-3">
           {subjects.map((subjectItem) => { const subjectSessions = sessions.filter((item) => item.subject_id === subjectItem.id); if (subjectSessions.length === 0) return null; return (
@@ -224,7 +235,7 @@ export function AdminBoard({ onDataChanged }: { onDataChanged?: () => void }) {
                     transition={hoverTransition}
                     className="admin-session-row flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-3"
                   >
-                    <div className="min-w-0 text-xs leading-5 text-[var(--ink)]"><p className="font-semibold">{dayLabel(item.day)} · {item.start_time.slice(0, 5)}–{item.end_time.slice(0, 5)} · Sección {item.section}</p><p className="text-[var(--muted)]">Profesor: {relationValue(item.professors)?.display_name ?? "Sin asignar"} · Aula: {relationValue(item.rooms)?.name ?? "Sin asignar"}</p></div>
+                    <div className="min-w-0 text-xs leading-5 text-[var(--ink)]"><p className="font-semibold">{dayLabel(item.day)} · {item.start_time.slice(0, 5)}–{item.end_time.slice(0, 5)} · Sección {item.section}{item.comision_id ? ` · ${item.comision_id}` : ""}</p><p className="text-[var(--muted)]">Profesor: {relationValue(item.professors)?.display_name ?? "Sin asignar"} · Aula: {relationValue(item.rooms)?.name ?? "Sin asignar"}</p></div>
                     <div className="flex shrink-0 items-center gap-3"><button type="button" onClick={() => editSchedule(item)} className="text-xs font-semibold text-[var(--accent)] hover:underline">Editar asignación</button><button type="button" onClick={() => void remove("schedules", item.id, "la sesión")} className="text-xs font-semibold text-rose-500 hover:underline">Eliminar</button></div>
                   </motion.div>
                 ))}

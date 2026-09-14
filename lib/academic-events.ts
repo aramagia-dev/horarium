@@ -14,6 +14,7 @@ export type AcademicEvent = {
   date: string;
   time: string | null;
   subject_id: string | null;
+  comision_id?: string | null;
   subject_code: string | null;
   description: string | null;
   status: AcademicEventStatus;
@@ -46,6 +47,7 @@ export type AcademicEventInput = Omit<AcademicEvent, "id" | "created_at" | "upda
   id?: string;
   subject_code?: string | null;
   event_type?: EventType;
+  comision_id?: string | null;
 };
 
 export const eventsChangedEvent = "horarium:events-changed";
@@ -76,8 +78,8 @@ function localDate(offset: number) {
 function demoEvents(): AcademicEvent[] {
   const now = new Date().toISOString();
   return [
-    { id: "demo-parcial-asi", title: "Parcial de ASI", type: "parcial", date: localDate(5), time: "18:00", subject_id: "subject-asi", subject_code: "ASI", description: "Primera evaluación de la cursada.", status: "pending", created_by: null, created_at: now, updated_at: now, event_type: "individual", completed_by: null, completed_at: null },
-    { id: "demo-entrega-red", title: "Entrega de TP de Redes", type: "entrega", date: localDate(12), time: null, subject_id: "subject-red", subject_code: "RED", description: null, status: "pending", created_by: null, created_at: now, updated_at: now, event_type: "individual", completed_by: null, completed_at: null },
+    { id: "demo-parcial-asi", title: "Parcial de ASI", type: "parcial", date: localDate(5), time: "18:00", subject_id: "subject-asi", comision_id: null, subject_code: "ASI", description: "Primera evaluación de la cursada.", status: "pending", created_by: null, created_at: now, updated_at: now, event_type: "individual", completed_by: null, completed_at: null },
+    { id: "demo-entrega-red", title: "Entrega de TP de Redes", type: "entrega", date: localDate(12), time: null, subject_id: "subject-red", comision_id: null, subject_code: "RED", description: null, status: "pending", created_by: null, created_at: now, updated_at: now, event_type: "individual", completed_by: null, completed_at: null },
   ];
 }
 
@@ -211,7 +213,7 @@ export async function loadAcademicEvents(): Promise<{ events: EnrichedEvent[]; s
 
   const result = await supabase
     .from("academic_events")
-    .select("id, title, type, date, time, subject_id, description, status, created_by, created_at, updated_at, event_type, completed_by, completed_at, subjects(code)")
+    .select("id, title, type, date, time, subject_id, comision_id, description, status, created_by, created_at, updated_at, event_type, completed_by, completed_at, subjects(code)")
     .order("date")
     .order("time", { nullsFirst: false });
 
@@ -232,6 +234,7 @@ export async function loadAcademicEvents(): Promise<{ events: EnrichedEvent[]; s
       date: row.date as string,
       time: row.time as string | null,
       subject_id: row.subject_id as string | null,
+      comision_id: (row.comision_id as string | null) ?? null,
       subject_code: subject?.code ?? null,
       description: row.description as string | null,
       status: row.status as AcademicEventStatus,
@@ -285,12 +288,15 @@ export async function loadAcademicEvents(): Promise<{ events: EnrichedEvent[]; s
 export async function saveAcademicEvent(input: AcademicEventInput) {
   const rawTitle = input.title.trim();
   const title = rawTitle || (input.type === "feriado" ? "Sin clases" : "");
+  // feriado events are always global (no comision)
+  const comisionId = input.type === "feriado" ? null : (input.comision_id ?? null);
   const value = {
     title,
     type: input.type,
     date: input.date,
     time: input.type === "feriado" ? null : input.time || null,
     subject_id: input.subject_id || null,
+    comision_id: comisionId || null,
     description: input.description?.trim() || null,
     status: input.status,
     event_type: input.event_type ?? "individual",

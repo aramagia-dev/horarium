@@ -4,11 +4,19 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { loadPublicSchedule, type PublicScheduleState } from "@/lib/public-schedule";
+import { useEnrollments } from "@/lib/use-enrollments";
+import { useAuth } from "@/lib/auth-context";
+import type { EnrollmentMap } from "@/lib/enrollments";
 
 type ScheduleContextValue = {
   publicData: PublicScheduleState | null;
   loading: boolean;
   refresh: () => void;
+  enrollments: EnrollmentMap;
+  enrollmentsLoading: boolean;
+  saveEnrollment: (subjectId: string, comisionId: string) => Promise<void>;
+  clearEnrollments: () => Promise<void>;
+  refreshEnrollments: () => Promise<void>;
 };
 
 const ScheduleContext = createContext<ScheduleContextValue | undefined>(undefined);
@@ -18,6 +26,8 @@ export function ScheduleProvider({ children, initialData }: { children: React.Re
   const [loading, setLoading] = useState(!initialData);
   const requestId = useRef(0);
   const mounted = useRef(true);
+  const { userId } = useAuth();
+  const { enrollments, loading: enrollmentsLoading, saveEnrollment, clearEnrollments, refresh: refreshEnrollments } = useEnrollments(userId);
 
   const refresh = useCallback(() => {
     const id = ++requestId.current;
@@ -37,7 +47,10 @@ export function ScheduleProvider({ children, initialData }: { children: React.Re
     };
   }, [initialData, refresh]);
 
-  const value = useMemo(() => ({ publicData, loading, refresh }), [publicData, loading, refresh]);
+  const value = useMemo(
+    () => ({ publicData, loading, refresh, enrollments, enrollmentsLoading, saveEnrollment, clearEnrollments, refreshEnrollments }),
+    [publicData, loading, refresh, enrollments, enrollmentsLoading, saveEnrollment, clearEnrollments, refreshEnrollments],
+  );
 
   return <ScheduleContext.Provider value={value}>{children}</ScheduleContext.Provider>;
 }

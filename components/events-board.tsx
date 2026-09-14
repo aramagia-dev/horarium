@@ -27,6 +27,8 @@ import type { Subject } from "@/lib/schedule-data";
 import { parseDateInput } from "@/lib/calendar-utils";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { hoverTransition, pageVariants, springTransition, staggerContainer, staggerItem, subtleCardHover, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { useSchedule } from "@/lib/schedule-context";
+import { deriveAvailableComisiones, isEventVisible } from "@/lib/enrollments";
 import {
   filterEventsByCompletion,
   getCompletionCounts,
@@ -36,7 +38,7 @@ import {
 } from "@/lib/event-completion-board";
 
 const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", tarea: "Tarea", recuperatorio: "Recuperatorio", exposición: "Exposición", feriado: "Sin clases", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
-const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, description: "", status: "pending", event_type: "individual" };
+const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, comision_id: null, description: "", status: "pending", event_type: "individual" };
 
 type CompletionFilter = "pendientes" | "completados" | "todos" | "vencidos";
 const FILTER_STORAGE_KEY = "horarium:events-completion-filter";
@@ -81,6 +83,12 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   const canEdit = (event: AcademicEvent) => canManage || (Boolean(userId) && event.created_by === userId);
   const canDelete = (event: AcademicEvent) => canDeleteAcademicEvent(event, { isAdmin, userId });
   const reduced = useReducedMotion();
+  const { publicData, enrollments } = useSchedule();
+  const availableComisionesBySubject = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
+  const formSubjectComisiones = useMemo(() => {
+    if (!form.subject_id) return [];
+    return availableComisionesBySubject.get(form.subject_id) ?? [];
+  }, [form.subject_id, availableComisionesBySubject]);
 
   // persist + restore completion filter (URL/storage else memory)
   useEffect(() => {
@@ -183,8 +191,14 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
 
 
   const otherFiltered = useMemo(() => {
-    return (events as EnrichedEvent[]).filter((event) => (typeFilter === "all" || event.type === typeFilter) && (statusFilter === "all" || event.status === statusFilter) && (subjectFilter === "all" || event.subject_id === subjectFilter));
-  }, [events, statusFilter, subjectFilter, typeFilter]);
+    return (events as EnrichedEvent[]).filter(
+      (event) =>
+        (typeFilter === "all" || event.type === typeFilter) &&
+        (statusFilter === "all" || event.status === statusFilter) &&
+        (subjectFilter === "all" || event.subject_id === subjectFilter) &&
+        isEventVisible({ subject_id: event.subject_id ?? null, comision_id: (event as unknown as { comision_id?: string | null }).comision_id ?? null }, enrollments),
+    );
+  }, [events, statusFilter, subjectFilter, typeFilter, enrollments]);
 
   const counts = useMemo(() => getCompletionCounts(otherFiltered as EnrichedEvent[]), [otherFiltered]);
 
@@ -235,8 +249,22 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         const createdForNotify = fresh.events.find((e) => e.title === snapshot.title && e.date === snapshot.date) ?? fresh.events[0];
         const eventId = createdForNotify?.id ?? null;
         if (!eventId) return;
-        const { data: profiles } = await supabase.from("profiles").select("id");
-        const recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
+        const snapshotComision = (snapshot as { comision_id?: string | null }).comision_id ?? null;
+        const snapshotSubject = (snapshot as { subject_id?: string | null }).subject_id ?? null;
+        let recipients: string[] = [];
+        if (!snapshotSubject || !snapshotComision) {
+          const { data: profiles } = await supabase.from("profiles").select("id");
+          recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
+        } else {
+          const { data: enrollRows, error: enrollError } = await supabase.from("user_enrollments").select("user_id").eq("subject_id", snapshotSubject).eq("comision_id", snapshotComision);
+          if (enrollError) {
+            // fallback to all to avoid silent loss
+            const { data: profiles } = await supabase.from("profiles").select("id");
+            recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
+          } else {
+            recipients = ((enrollRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id).filter((id) => id !== userId);
+          }
+        }
         if (recipients.length === 0) return;
         const { createNotifications } = await import("@/lib/notifications");
         const subjectCode = snapshot.subject_id ? (subjects.find((s) => s.id === snapshot.subject_id)?.code ?? "") : "";
@@ -365,7 +393,10 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
               <label className="text-xs font-semibold text-[var(--muted)]">Tipo<select className="admin-control mt-1" value={form.type} onChange={(e) => { const nextType = e.target.value as AcademicEventType; setForm((prev) => ({ ...prev, type: nextType, ...(nextType === "feriado" ? { event_type: "individual" as EventType } : {}) })); }}>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Fecha<input className="admin-control mt-1" required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
               {form.type !== "feriado" ? <label className="text-xs font-semibold text-[var(--muted)]">Hora opcional<input className="admin-control mt-1" type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label> : null}
-              <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
+              <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, comision_id: null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
+              {form.type !== "feriado" && form.subject_id && formSubjectComisiones.length > 0 ? (
+                <label className="text-xs font-semibold text-[var(--muted)]">Comisión<select className="admin-control mt-1" value={form.comision_id ?? ""} onChange={(e) => setForm({ ...form, comision_id: e.target.value || null })}><option value="">Todas</option>{formSubjectComisiones.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+              ) : null}
               <label className="text-xs font-semibold text-[var(--muted)]">Estado<select className="admin-control mt-1" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AcademicEventStatus })}>{eventStatuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select></label>
               {form.type !== "feriado" ? (
                 <label className="text-xs font-semibold text-[var(--muted)]">Modalidad

@@ -15,15 +15,20 @@ const LOCAL_SYNC_KEY = "horarium:enrollments:local";
 
 export function useEnrollments(userId: string | null) {
   const [enrollments, setEnrollments] = useState<EnrollmentMap>(() => new Map());
-  const [loading, setLoading] = useState(false);
+  // starts true so the calendar never flashes the global view before the
+  // first fetch resolves; the `&& !!userId` in the return keeps logged-out
+  // users (global view) from waiting.
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!userId) {
       setEnrollments(new Map());
+      setLoading(false);
       return;
     }
     if (!supabaseConfigured || !supabase) {
       setEnrollments(loadLocalEnrollments());
+      setLoading(false);
       return;
     }
     setLoading(true);

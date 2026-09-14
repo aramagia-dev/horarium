@@ -99,9 +99,9 @@ export function EnrollmentOnboarding() {
   if (!visible || !userId || isAdmin) return null;
   if (subjectsWithComisiones.length === 0) return null;
 
-  const handleSave = async (forced: boolean) => {
+  const handleSave = async () => {
     if (saving) return;
-    if (!forced && overlaps.length > 0) {
+    if (overlaps.length > 0) {
       setSaveBlocked(true);
       return;
     }
@@ -203,15 +203,7 @@ export function EnrollmentOnboarding() {
 
         {saveBlocked && overlaps.length > 0 ? (
           <div role="alert" className="mt-4 rounded-xl border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-xs leading-5 text-red-800 dark:text-red-200">
-            <p className="font-semibold">No se puede guardar: hay superposiciones en tu semana (ver arriba). Cambia alguna comisión o guardá igual.</p>
-            <button
-              type="button"
-              onClick={() => void handleSave(true)}
-              disabled={saving}
-              className="mt-2 rounded-full bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
-            >
-              Guardar igual
-            </button>
+            <p className="font-semibold">No se puede guardar: hay superposiciones en tu semana (ver arriba). Cambiá alguna comisión para continuar.</p>
           </div>
         ) : null}
 
@@ -226,7 +218,7 @@ export function EnrollmentOnboarding() {
           </button>
           <button
             type="button"
-            onClick={() => void handleSave(false)}
+            onClick={() => void handleSave()}
             disabled={saving}
             className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
           >

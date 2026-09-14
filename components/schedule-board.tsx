@@ -390,6 +390,7 @@ function ScheduleCard({ entry, date, events, subjectSessions, onSelect, onSelect
   // instead of clipping them, and leave 1px breathing room so neighbors don't touch.
   const compact = height < 120;
   const tiny = height < 84;
+  const whoRoom = [entry.professor, entry.room].filter((v) => v && v !== "Sin asignar").join(" - ");
   return (
     <motion.div
       role="button"
@@ -405,14 +406,14 @@ function ScheduleCard({ entry, date, events, subjectSessions, onSelect, onSelect
       <span className="block truncate text-[10px] font-bold tracking-[0.12em] opacity-80 uppercase">{entry.section}</span>
       {!tiny && sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} compact /> : null}
       <strong className={`mt-1 block font-bold ${tiny ? "line-clamp-1 text-[13px] leading-4" : "line-clamp-2 text-sm leading-4"}`}>{entry.subject}</strong>
-      {tiny ? null : <span className="mt-1.5 block truncate text-[11px] font-medium opacity-75">{entry.professor}</span>}
-      {compact ? null : <span className="mt-0.5 block truncate text-[11px] font-medium opacity-75">{entry.room}</span>}
+      {tiny || !whoRoom ? null : <span className="mt-1.5 block truncate text-[11px] font-medium opacity-75">{whoRoom}</span>}
     </motion.div>
   );
 }
 
 function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], onSelect, onSelectEvent, reduced }: { entry: ScheduleEntry; date: Date; events: AcademicEvent[]; subjectSessions?: ScheduleEntry[]; onSelect: (subject: ScheduleEntry, date: Date) => void; onSelectEvent: (event: AcademicEvent) => void; reduced: boolean | null }) {
   const sessionEvents = getSessionEvents(entry, date, events, subjectSessions);
+  const whoRoom = [entry.professor, entry.room].filter((v) => v && v !== "Sin asignar").join(" - ");
   return (
     <motion.div
       role="button"
@@ -430,8 +431,7 @@ function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], on
       </div>
       <div className="min-w-0 flex-1 overflow-hidden">
         <strong className="block break-words text-base font-bold leading-5">{entry.subject}</strong>
-        <span className="mt-1 block break-words text-sm opacity-75">{entry.professor}</span>
-        <span className="mt-2 block break-words text-sm opacity-75">⌖ {entry.room}</span>
+        {whoRoom ? <span className="mt-1 block break-words text-sm opacity-75">{whoRoom}</span> : null}
         {sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} /> : null}
       </div>
       <span className="shrink-0 rounded-full border border-black/5 bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide text-slate-700 shadow-sm dark:border-white/10 dark:bg-white dark:text-slate-800">{entry.section.replace("Section ", "Sec ")}</span>

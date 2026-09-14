@@ -283,8 +283,10 @@ export async function loadAcademicEvents(): Promise<{ events: EnrichedEvent[]; s
 }
 
 export async function saveAcademicEvent(input: AcademicEventInput) {
+  const rawTitle = input.title.trim();
+  const title = rawTitle || (input.type === "feriado" ? "Sin clases" : "");
   const value = {
-    title: input.title.trim(),
+    title,
     type: input.type,
     date: input.date,
     time: input.time || null,
@@ -293,7 +295,8 @@ export async function saveAcademicEvent(input: AcademicEventInput) {
     status: input.status,
     event_type: input.event_type ?? "individual",
   };
-  if (!value.title || !value.date) return { error: "Completá el título y la fecha." };
+  if (!title || !value.date) return { error: !title ? "Completá el título y la fecha." : "Completá la fecha." };
+  if (input.type === "feriado" && !value.description) return { error: "Contanos el motivo en la descripción." };
   if (!supabaseConfigured || !supabase) {
     const current = readLocalEvents();
     const now = new Date().toISOString();

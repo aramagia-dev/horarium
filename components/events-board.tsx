@@ -202,7 +202,8 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const isCreating = !form.id;
-    const payload = form.type === "feriado" ? { ...form, event_type: "individual" as EventType } : form;
+    const withDefaultTitle = form.type === "feriado" && !form.title.trim() ? { ...form, title: "Sin clases" } : form;
+    const payload = withDefaultTitle.type === "feriado" ? { ...withDefaultTitle, event_type: "individual" as EventType } : withDefaultTitle;
     const snapshot = { ...payload };
     const result = await saveAcademicEvent(payload);
     if (result.error) return setError(result.error);
@@ -354,7 +355,11 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
             className="mb-6 rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4 sm:p-6"
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-[var(--muted)]">Título<input ref={titleInputRef} className="admin-control mt-1" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
+              {form.type !== "feriado" ? (
+                <label className="text-xs font-semibold text-[var(--muted)]">Título<input ref={titleInputRef} className="admin-control mt-1" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
+              ) : (
+                <div className="text-xs font-semibold text-[var(--muted)]">Título<p className="mt-1 rounded-lg bg-[var(--soft)] px-3 py-2.5 text-sm font-medium text-[var(--muted)]">Sin clases (automático)</p></div>
+              )}
               <label className="text-xs font-semibold text-[var(--muted)]">Tipo<select className="admin-control mt-1" value={form.type} onChange={(e) => { const nextType = e.target.value as AcademicEventType; setForm((prev) => ({ ...prev, type: nextType, ...(nextType === "feriado" ? { event_type: "individual" as EventType } : {}) })); }}>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Fecha<input className="admin-control mt-1" required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Hora opcional<input className="admin-control mt-1" type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label>
@@ -371,7 +376,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
               ) : (
                 <p className="mt-1 text-[10px] leading-3 text-[var(--muted)]">Evento informativo para toda la cursada — no se marca como completado.</p>
               )}
-              <label className="text-xs font-semibold text-[var(--muted)] sm:col-span-2">Descripción<textarea className="admin-control mt-1 min-h-20" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+              <label className="text-xs font-semibold text-[var(--muted)] sm:col-span-2">Descripción<textarea className="admin-control mt-1 min-h-20" required={form.type === "feriado"} placeholder={form.type === "feriado" ? "Ej: Feriado nacional, paro, suspensión por lluvia…" : undefined} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
             </div>
             <div className="mt-4 flex gap-3">
               <button type="submit" className="admin-primary">{form.id ? "Guardar cambios" : "Crear evento"}</button>

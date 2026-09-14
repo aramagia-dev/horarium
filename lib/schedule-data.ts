@@ -9,9 +9,16 @@ export type Subject = {
   accent: Accent;
 };
 
+export type Comision = {
+  id: string;
+  label: string;
+  shift: string;
+};
+
 export type ScheduleSession = {
   id: string;
   subjectId: string;
+  comisionId?: string | null;
   day: Day;
   start: string;
   end: string;
@@ -22,6 +29,7 @@ export type ScheduleSession = {
 
 export type ScheduleEntry = ScheduleSession & {
   subjectId: string;
+  comisionId?: string | null;
   subject: string;
   code: string;
   accent: Accent;
@@ -29,9 +37,9 @@ export type ScheduleEntry = ScheduleSession & {
 
 export const days: Day[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
-export const timelineEnd = "21:15";
-export const timelineDisplayEnd = "22:00";
-export const timeSlots = ["13:15", "14:00", "14:45", "15:30", "16:15", "17:00", "17:45", "18:15", "19:00", "19:45", "20:30", timelineEnd, timelineDisplayEnd];
+export const timelineEnd = "23:30";
+export const timelineDisplayEnd = "23:30";
+export const timeSlots = ["13:15", "14:00", "14:45", "15:30", "16:15", "17:00", "17:45", "18:15", "19:00", "19:45", "20:30", "21:15", "22:00", timelineEnd];
 
 export const subjects: Subject[] = [
   { id: "subject-asi", code: "ASI", name: "Administración de Sistemas de Información", accent: "violet" },
@@ -84,7 +92,7 @@ export function dayLabel(day: Day) {
 export type CatalogProfessor = { id: string; display_name: string };
 export type CatalogRoom = { id: string; name: string };
 type RemoteRelation<T> = T | T[] | null;
-type RemoteSchedule = { id: string; subject_id: string; day: Day; start_time: string; end_time: string; section: string; subjects: RemoteRelation<Subject>; professors: RemoteRelation<{ display_name: string }>; rooms: RemoteRelation<{ name: string }> };
+type RemoteSchedule = { id: string; subject_id: string; comision_id?: string | null; day: Day; start_time: string; end_time: string; section: string; subjects: RemoteRelation<Subject>; professors: RemoteRelation<{ display_name: string }>; rooms: RemoteRelation<{ name: string }> };
 
 export function mapRemoteSchedule(rows: RemoteSchedule[]): ScheduleEntry[] {
   return rows.flatMap((row) => {
@@ -92,6 +100,21 @@ export function mapRemoteSchedule(rows: RemoteSchedule[]): ScheduleEntry[] {
     if (!subject) return [];
     const professor = Array.isArray(row.professors) ? row.professors[0] : row.professors;
     const room = Array.isArray(row.rooms) ? row.rooms[0] : row.rooms;
-    return [{ id: row.id, subjectId: row.subject_id, day: row.day, start: row.start_time.slice(0, 5), end: row.end_time.slice(0, 5), section: row.section, professor: professor?.display_name ?? "Sin asignar", room: room?.name ?? "Sin asignar", subject: subject.name, code: subject.code, accent: subject.accent }];
+    return [
+      {
+        id: row.id,
+        subjectId: row.subject_id,
+        comisionId: (row.comision_id as string | null) ?? null,
+        day: row.day,
+        start: row.start_time.slice(0, 5),
+        end: row.end_time.slice(0, 5),
+        section: row.section,
+        professor: professor?.display_name ?? "Sin asignar",
+        room: room?.name ?? "Sin asignar",
+        subject: subject.name,
+        code: subject.code,
+        accent: subject.accent,
+      },
+    ];
   });
 }

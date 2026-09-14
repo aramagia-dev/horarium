@@ -553,11 +553,7 @@ function EventPreview({ events, onSelect, compact = false }: { events: AcademicE
               onSelect(event);
             }}
             onKeyDown={(key) => key.stopPropagation()}
-            className={
-              compact
-                ? "flex min-w-0 w-full max-w-full items-center gap-1.5 rounded-md px-0 py-0.5 text-left text-[10px] font-semibold transition hover:text-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
-                : "flex min-w-0 w-full max-w-full items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)]/90 px-1.5 py-1 text-left text-[10px] font-semibold shadow-sm transition hover:border-[var(--accent)] focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
-            }
+            className="flex min-w-0 w-full max-w-full items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)]/90 px-1.5 py-1 text-left text-[10px] font-semibold shadow-sm transition hover:border-[var(--accent)] focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
           >
             <Icon aria-hidden="true" size={13} className={`shrink-0 ${visual.color}`} />
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-[var(--muted)]">{visual.label}</span>

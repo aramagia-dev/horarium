@@ -6,6 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Horarium",
     description: "Un horario universitario semanal compartido.",
     start_url: "/",
+    id: "/",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
@@ -16,7 +17,6 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["education", "productivity"],
     icons: [
       { src: "/icon", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };

@@ -20,6 +20,16 @@ export function useEnrollments(userId: string | null) {
   // users (global view) from waiting.
   const [loading, setLoading] = useState(true);
 
+  // Reset synchronously on account switch (adjust state during render): without
+  // this, consumers commit one frame with the PREVIOUS account's enrollments
+  // and a stale loading=false — the onboarding modal flashes, then closes.
+  const [activeUserId, setActiveUserId] = useState<string | null>(userId);
+  if (activeUserId !== userId) {
+    setActiveUserId(userId);
+    setEnrollments(new Map());
+    setLoading(true);
+  }
+
   const refresh = useCallback(async () => {
     if (!userId) {
       setEnrollments(new Map());

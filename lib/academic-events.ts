@@ -68,6 +68,17 @@ function mapCompletionError(err: unknown): string {
   return raw;
 }
 
+function mapEventWriteError(err: unknown): string {
+  const raw = typeof err === "string" ? err : ((err as { message?: string })?.message ?? String(err));
+  const lower = raw.toLowerCase();
+  // Authenticated INSERT with created_by=self only fails when the DB predates
+  // the user-CRUD policies — point at the migration instead of the raw RLS text.
+  if (lower.includes("row-level security") || lower.includes("42501")) {
+    return "No se pudo crear el evento por permisos. Si tu cuenta no es admin, pedí que se ejecute supabase/academic-events.sql en el SQL Editor de Supabase y volvé a intentar.";
+  }
+  return raw;
+}
+
 function localDate(offset: number) {
   const date = new Date();
   date.setHours(12, 0, 0, 0);
@@ -319,7 +330,7 @@ export async function saveAcademicEvent(input: AcademicEventInput) {
   const result = input.id
     ? await supabase.from("academic_events").update(value).eq("id", input.id)
     : await supabase.from("academic_events").insert(insertValue);
-  if (result.error) return { error: result.error.message };
+  if (result.error) return { error: input.id ? result.error.message : mapEventWriteError(result.error) };
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventsChangedEvent));
   return { error: "" };
 }

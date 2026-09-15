@@ -19,7 +19,7 @@ import {
 
 export function EnrollmentOnboarding() {
   const { userId, isAdmin } = useAuth();
-  const { publicData, enrollments, saveEnrollment } = useSchedule();
+  const { publicData, enrollments, enrollmentsLoading, saveEnrollment } = useSchedule();
 
   const available = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
   const subjectYears = useMemo(() => getSubjectYears(available), [available]);
@@ -64,10 +64,14 @@ export function EnrollmentOnboarding() {
       setVisible(false);
       return;
     }
+    // Wait until THIS account's enrollments resolved — an empty map while
+    // loading looks exactly like a new user, which flashed the modal on
+    // every session switch.
+    if (enrollmentsLoading) return;
     const isDismissed = isOnboardingDismissed(userId);
     const shouldShow = shouldShowOnboarding(enrollments, isDismissed, userId) && subjectsWithComisiones.length > 0;
     setVisible(shouldShow);
-  }, [userId, isAdmin, enrollments, subjectsWithComisiones.length]);
+  }, [userId, isAdmin, enrollments, enrollmentsLoading, subjectsWithComisiones.length]);
 
   // allow external reopen (catalog-board can dispatch event)
   useEffect(() => {

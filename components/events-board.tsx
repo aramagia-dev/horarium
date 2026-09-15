@@ -27,6 +27,8 @@ import type { Subject } from "@/lib/schedule-data";
 import { parseDateInput } from "@/lib/calendar-utils";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { hoverTransition, pageVariants, springTransition, staggerContainer, staggerItem, subtleCardHover, useReducedMotion, withReducedMotion } from "@/lib/motion";
+import { useSchedule } from "@/lib/schedule-context";
+import { deriveAvailableComisiones, isEventVisible } from "@/lib/enrollments";
 import {
   filterEventsByCompletion,
   getCompletionCounts,
@@ -36,7 +38,7 @@ import {
 } from "@/lib/event-completion-board";
 
 const labels: Record<AcademicEventType | AcademicEventStatus, string> = { parcial: "Parcial", entrega: "Entrega", tarea: "Tarea", recuperatorio: "Recuperatorio", exposición: "Exposición", feriado: "Sin clases", otro: "Otro", pending: "Pendiente", completed: "Completado", cancelled: "Cancelado" };
-const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, description: "", status: "pending", event_type: "individual" };
+const emptyForm: AcademicEventInput = { title: "", type: "otro", date: "", time: "", subject_id: null, comision_id: null, description: "", status: "pending", event_type: "individual" };
 
 type CompletionFilter = "pendientes" | "completados" | "todos" | "vencidos";
 const FILTER_STORAGE_KEY = "horarium:events-completion-filter";
@@ -68,7 +70,6 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   const [form, setForm] = useState<AcademicEventInput>(emptyForm);
   const [editing, setEditing] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>("pendientes");
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -81,6 +82,47 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
   const canEdit = (event: AcademicEvent) => canManage || (Boolean(userId) && event.created_by === userId);
   const canDelete = (event: AcademicEvent) => canDeleteAcademicEvent(event, { isAdmin, userId });
   const reduced = useReducedMotion();
+  const { publicData, enrollments } = useSchedule();
+  const availableComisionesBySubject = useMemo(() => deriveAvailableComisiones(publicData?.schedule ?? []), [publicData]);
+  const formSubjectComisiones = useMemo(() => {
+    if (!form.subject_id) return [];
+    return availableComisionesBySubject.get(form.subject_id) ?? [];
+  }, [form.subject_id, availableComisionesBySubject]);
+  const [comisionFilter, setComisionFilter] = useState("all");
+  // Comisión options are scoped to the user: where they are enrolled, plus
+  // comisiones of events they created themselves (so a creator can filter
+  // what they made for another comisión). Admins — and users who haven't
+  // onboarded yet — keep every known code. The current selection is always
+  // kept so the dropdown never blanks.
+  const filterComisiones = useMemo(() => {
+    if (isAdmin || enrollments.size === 0) {
+      if (subjectFilter !== "all") return availableComisionesBySubject.get(subjectFilter) ?? [];
+      const all = new Set<string>();
+      for (const list of availableComisionesBySubject.values()) for (const c of list) all.add(c);
+      return [...all].sort();
+    }
+    const mine = new Set<string>();
+    for (const c of enrollments.values()) if (c) mine.add(c);
+    if (userId) {
+      for (const e of events) {
+        if (e.created_by === userId && e.comision_id) mine.add(e.comision_id);
+      }
+    }
+    if (comisionFilter !== "all") mine.add(comisionFilter);
+    const pool = subjectFilter !== "all"
+      ? (availableComisionesBySubject.get(subjectFilter) ?? [])
+      : [...availableComisionesBySubject.values()].flat();
+    return [...new Set(pool.filter((c) => mine.has(c)))].sort();
+  }, [subjectFilter, availableComisionesBySubject, enrollments, events, userId, isAdmin, comisionFilter]);
+  // Regular users pick from their enrolled subjects only, in the form and the
+  // filter. Admins — and users who haven't onboarded yet (no enrollments) —
+  // keep the full list. The current selection is always kept so editing never
+  // blanks the dropdown.
+  const visibleSubjects = useMemo(() => {
+    if (isAdmin || enrollments.size === 0) return subjects;
+    const keep = new Set([form.subject_id, subjectFilter].filter((v): v is string => Boolean(v)));
+    return subjects.filter((s) => enrollments.has(s.id) || keep.has(s.id));
+  }, [subjects, enrollments, isAdmin, form.subject_id, subjectFilter]);
 
   // persist + restore completion filter (URL/storage else memory)
   useEffect(() => {
@@ -148,7 +190,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
       setEditing(true);
       // Ensure new event will be visible
       setTypeFilter("all");
-      setStatusFilter("all");
+      setComisionFilter("all");
       setSubjectFilter("all");
       setCompletionFilter("pendientes");
       setError("");
@@ -183,8 +225,18 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
 
 
   const otherFiltered = useMemo(() => {
-    return (events as EnrichedEvent[]).filter((event) => (typeFilter === "all" || event.type === typeFilter) && (statusFilter === "all" || event.status === statusFilter) && (subjectFilter === "all" || event.subject_id === subjectFilter));
-  }, [events, statusFilter, subjectFilter, typeFilter]);
+    return (events as EnrichedEvent[]).filter(
+      (event) =>
+        (typeFilter === "all" || event.type === typeFilter) &&
+        (subjectFilter === "all" || event.subject_id === subjectFilter) &&
+        (comisionFilter === "all" || !event.comision_id || event.comision_id === comisionFilter) &&
+        // Enrollment visibility — except the creator always sees their own
+        // events. Otherwise creating for another comisión makes the event
+        // vanish with no way to edit or delete it.
+        (isEventVisible({ subject_id: event.subject_id ?? null, comision_id: (event as unknown as { comision_id?: string | null }).comision_id ?? null }, enrollments) ||
+          (userId != null && event.created_by === userId)),
+    );
+  }, [events, comisionFilter, subjectFilter, typeFilter, enrollments, userId]);
 
   const counts = useMemo(() => getCompletionCounts(otherFiltered as EnrichedEvent[]), [otherFiltered]);
 
@@ -218,16 +270,19 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
       const created = fresh.events.find((e) => e.title === snapshot.title && e.date === snapshot.date) ?? fresh.events[0];
       const eventId = created?.id ?? null;
       if (eventId) {
-        // Ensure visible filters so highlight can scroll into view
-        setCompletionFilter("pendientes");
+        // Ensure visible filters so highlight can scroll into view. An
+        // overdue event would vanish under "pendientes", so show "todos".
+        const showAll = created ? isEventOverdue(created as AcademicEvent, false) : false;
+        const visibleFilter = showAll ? "todos" : "pendientes";
+        setCompletionFilter(visibleFilter);
         setTypeFilter("all");
-        setStatusFilter("all");
+        setComisionFilter("all");
         setSubjectFilter("all");
         try {
-          window.localStorage.setItem(FILTER_STORAGE_KEY, "pendientes");
+          window.localStorage.setItem(FILTER_STORAGE_KEY, visibleFilter);
         } catch {}
         window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events", eventId } }));
-        window.dispatchEvent(new CustomEvent("horarium:events-show-pendientes"));
+        window.dispatchEvent(new CustomEvent(showAll ? "horarium:events-show-todos" : "horarium:events-show-pendientes"));
       }
     }
     if (isCreating && supabase && userId) {
@@ -235,8 +290,22 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         const createdForNotify = fresh.events.find((e) => e.title === snapshot.title && e.date === snapshot.date) ?? fresh.events[0];
         const eventId = createdForNotify?.id ?? null;
         if (!eventId) return;
-        const { data: profiles } = await supabase.from("profiles").select("id");
-        const recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
+        const snapshotComision = (snapshot as { comision_id?: string | null }).comision_id ?? null;
+        const snapshotSubject = (snapshot as { subject_id?: string | null }).subject_id ?? null;
+        let recipients: string[] = [];
+        if (!snapshotSubject || !snapshotComision) {
+          const { data: profiles } = await supabase.from("profiles").select("id");
+          recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
+        } else {
+          const { data: enrollRows, error: enrollError } = await supabase.from("user_enrollments").select("user_id").eq("subject_id", snapshotSubject).eq("comision_id", snapshotComision);
+          if (enrollError) {
+            // fallback to all to avoid silent loss
+            const { data: profiles } = await supabase.from("profiles").select("id");
+            recipients = (profiles ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== userId);
+          } else {
+            recipients = ((enrollRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id).filter((id) => id !== userId);
+          }
+        }
         if (recipients.length === 0) return;
         const { createNotifications } = await import("@/lib/notifications");
         const subjectCode = snapshot.subject_id ? (subjects.find((s) => s.id === snapshot.subject_id)?.code ?? "") : "";
@@ -365,7 +434,10 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
               <label className="text-xs font-semibold text-[var(--muted)]">Tipo<select className="admin-control mt-1" value={form.type} onChange={(e) => { const nextType = e.target.value as AcademicEventType; setForm((prev) => ({ ...prev, type: nextType, ...(nextType === "feriado" ? { event_type: "individual" as EventType } : {}) })); }}>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label>
               <label className="text-xs font-semibold text-[var(--muted)]">Fecha<input className="admin-control mt-1" required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
               {form.type !== "feriado" ? <label className="text-xs font-semibold text-[var(--muted)]">Hora opcional<input className="admin-control mt-1" type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label> : null}
-              <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
+              <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, comision_id: null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{visibleSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
+              {form.subject_id && formSubjectComisiones.length > 0 ? (
+                <label className="text-xs font-semibold text-[var(--muted)]">Comisión<select className="admin-control mt-1" value={form.comision_id ?? ""} onChange={(e) => setForm({ ...form, comision_id: e.target.value || null })}><option value="">Todas</option>{formSubjectComisiones.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+              ) : null}
               <label className="text-xs font-semibold text-[var(--muted)]">Estado<select className="admin-control mt-1" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AcademicEventStatus })}>{eventStatuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select></label>
               {form.type !== "feriado" ? (
                 <label className="text-xs font-semibold text-[var(--muted)]">Modalidad
@@ -376,7 +448,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                   <p className="mt-1 text-[10px] font-normal leading-3 text-[var(--muted)]">Individual: cada uno marca el suyo · Grupal: uno completa por todos</p>
                 </label>
               ) : (
-                <p className="mt-1 text-[10px] leading-3 text-[var(--muted)]">Evento informativo para toda la cursada — no se marca como completado.</p>
+                <p className="mt-1 text-[10px] leading-3 text-[var(--muted)]">Evento informativo — no se marca como completado.</p>
               )}
               <label className="text-xs font-semibold text-[var(--muted)] sm:col-span-2">Descripción<textarea className="admin-control mt-1 min-h-20" required={form.type === "feriado"} placeholder={form.type === "feriado" ? "Ej: Feriado nacional, paro, suspensión por lluvia…" : undefined} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
             </div>
@@ -412,10 +484,10 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
           <select aria-label="Filtrar por tipo" className="admin-control" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}><option value="all">Todos los tipos</option>{eventTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select>
         </motion.div>
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
-          <select aria-label="Filtrar por estado" className="admin-control" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Todos los estados</option>{eventStatuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select>
+          <select aria-label="Filtrar por materia" className="admin-control" value={subjectFilter} onChange={(e) => { setSubjectFilter(e.target.value); setComisionFilter("all"); }}><option value="all">Todas las materias</option>{visibleSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code}</option>)}</select>
         </motion.div>
         <motion.div variants={withReducedMotion(staggerItem, reduced)}>
-          <select aria-label="Filtrar por materia" className="admin-control" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option value="all">Todas las materias</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code}</option>)}</select>
+          <select aria-label="Filtrar por comisión" className="admin-control" value={comisionFilter} onChange={(e) => setComisionFilter(e.target.value)} disabled={filterComisiones.length === 0}><option value="all">Todas las comisiones</option>{filterComisiones.map((c) => <option key={c} value={c}>{c}</option>)}</select>
         </motion.div>
       </motion.div>
       {selectedEvent && !selectedEventVisible ? <p role="status" className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">El evento seleccionado, «{selectedEvent.title}», está oculto por los filtros actuales.</p> : null}
@@ -440,7 +512,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
           </motion.div>
         ) : (
           <motion.div
-            key={`${typeFilter}-${statusFilter}-${subjectFilter}-${completionFilter}`}
+            key={`${typeFilter}-${subjectFilter}-${comisionFilter}-${completionFilter}`}
             variants={withReducedMotion(staggerContainer, reduced)}
             initial="hidden"
             animate="visible"
@@ -485,7 +557,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                           {!isFeriado && isGrupal ? <span className="flex items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]"><Users size={10} aria-hidden="true" />Grupal</span> : null}
                           {!isFeriado && isCompleted ? <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-600"><CheckCircle2 size={10} aria-hidden="true" />Completado</span> : null}
                         </div>
-                        <p className="mt-1 text-sm text-[var(--muted)]">{event.time ? `${event.time.slice(0, 5)} · ` : "Todo el día · "}{event.subject_code ?? "Sin materia"} · {labels[event.status]}{isOverdue ? " · Vencido" : ""}</p>
+                        <p className="mt-1 text-sm text-[var(--muted)]">{event.time ? `${event.time.slice(0, 5)} · ` : "Todo el día · "}{event.subject_code ?? "Sin materia"}{event.comision_id ? ` · ${event.comision_id}` : ""} · {labels[event.status]}{isOverdue ? " · Vencido" : ""}</p>
                         {event.description ? <p className="mt-2 text-sm leading-6 text-[var(--foreground)]">{event.description}</p> : null}
                         {/* Avatar stack — PR2 3.4 */}
                         {showAvatars && !isFeriado ? (

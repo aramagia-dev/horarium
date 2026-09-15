@@ -16,15 +16,12 @@ insert into public.subjects (id, code, name, accent) values
   ('subject-red', 'RED', 'Redes de Datos', 'blue'),
   ('subject-ics', 'ICS', 'Ingeniería y Calidad de Software', 'amber'),
   ('subject-ta',  'TA',  'Tecnología para la Automatización', 'teal'),
-  ('subject-ham', 'HAM', 'Heurísticas y Auto Maching Learning', 'rose'),
+  ('subject-ham', 'HAM', 'Algoritmos Genéticos de Optimización Heurística', 'rose'),
   ('subject-sig', 'SIG', 'Sistemas de Información Geográficos', 'teal'),
   ('subject-sri', 'SRI', 'Seguridad en Redes e Infraestructura', 'blue'),
-  ('subject-sgc', 'SGC', 'Sistemas de Gestión de la Calidad', 'amber'),
+  ('subject-sgc', 'SGC', 'Ingeniería y Calidad de Software', 'amber'),
   ('subject-pad', 'PAD', 'Programación de Aplicaciones Distribuidas', 'violet')
-on conflict (id) do update set
-  code   = excluded.code,
-  name   = excluded.name,
-  accent = excluded.accent;
+on conflict (id) do nothing;
 
 -- 2. Roster sessions — professor_id/room_id left NULL (schema allows NULL, UI maps NULL to "Sin asignar" in lib/schedule-data.ts:mapRemoteSchedule and components/schedule-board.tsx).
 --    Section follows demo convention: Teoría / Práctica for cores, Electivas for electives (the only 3 values in lib/schedule-data.ts demoSchedule; UI renders any string but slice keeps it canonical).
@@ -144,8 +141,8 @@ where not exists (select 1 from public.schedules where subject_id='subject-ta' a
 
 -- ── 4K6 electives (3) ───────────────────────────────────────────────────
 insert into public.schedules (subject_id, comision_id, day, start_time, end_time, section)
-select 'subject-ham', '4K6', 'Thursday',  '13:15', '16:15', 'Electivas'
-where not exists (select 1 from public.schedules where subject_id='subject-ham' and comision_id='4K6' and day='Thursday' and start_time='13:15' and section='Electivas');
+select 'subject-ham', '4K6', 'Thursday',  '13:30', '16:30', 'Electivas'
+where not exists (select 1 from public.schedules where subject_id='subject-ham' and comision_id='4K6' and day='Thursday' and section='Electivas');
 
 insert into public.schedules (subject_id, comision_id, day, start_time, end_time, section)
 select 'subject-sig', '4K6', 'Tuesday',   '16:15', '19:15', 'Electivas'
@@ -157,7 +154,7 @@ where not exists (select 1 from public.schedules where subject_id='subject-sri' 
 
 -- ── 4K7 electives (2) ───────────────────────────────────────────────────
 insert into public.schedules (subject_id, comision_id, day, start_time, end_time, section)
-select 'subject-sgc', '4K7', 'Tuesday',  '16:15', '18:30', 'Electivas'
+select 'subject-sgc', '4K7', 'Tuesday',  '16:15', '18:15', 'Electivas'
 where not exists (select 1 from public.schedules where subject_id='subject-sgc' and comision_id='4K7' and day='Tuesday' and start_time='16:15' and section='Electivas');
 
 insert into public.schedules (subject_id, comision_id, day, start_time, end_time, section)
@@ -166,5 +163,5 @@ where not exists (select 1 from public.schedules where subject_id='subject-sgc' 
 
 -- ── 4K8 electives (1) ───────────────────────────────────────────────────
 insert into public.schedules (subject_id, comision_id, day, start_time, end_time, section)
-select 'subject-pad', '4K8', 'Wednesday', '17:45', '20:45', 'Electivas'
-where not exists (select 1 from public.schedules where subject_id='subject-pad' and comision_id='4K8' and day='Wednesday' and start_time='17:45' and section='Electivas');
+select 'subject-pad', '4K8', 'Wednesday', '18:30', '21:30', 'Electivas'
+where not exists (select 1 from public.schedules where subject_id='subject-pad' and comision_id='4K8' and day='Wednesday' and section='Electivas');

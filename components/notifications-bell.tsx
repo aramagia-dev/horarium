@@ -26,13 +26,13 @@ type Props = {
 
 export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView }: Props) {
   const { userId } = useAuth();
-  const { publicData, refresh: refreshSchedule } = useSchedule();
+  const { publicData, refresh: refreshSchedule, enrollments } = useSchedule();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const dueEvents = getDueEvents(publicData?.events ?? []);
+  const dueEvents = getDueEvents(publicData?.events ?? [], enrollments);
   const limitedDue = dueEvents.slice(0, 3);
   const unreadCount = notifications.filter((n) => !n.read).length;
   const badgeText = unreadCount > 9 ? "9+" : String(unreadCount);

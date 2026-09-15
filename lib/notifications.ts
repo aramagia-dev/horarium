@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import type { AcademicEvent } from "@/lib/academic-events";
+import { isEventVisible, type EnrollmentMap } from "@/lib/enrollments";
 
 export type NotificationType = "new_comment" | "mention" | "new_event" | "live_note" | "event_completed";
 
@@ -92,7 +93,7 @@ function toLocalISODate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export function getDueEvents(events: AcademicEvent[]): AcademicEvent[] {
+export function getDueEvents(events: AcademicEvent[], enrollments?: EnrollmentMap): AcademicEvent[] {
   const now = new Date();
   const todayStr = toLocalISODate(now);
   const tomorrow = new Date(now);
@@ -100,7 +101,13 @@ export function getDueEvents(events: AcademicEvent[]): AcademicEvent[] {
   const tomorrowStr = toLocalISODate(tomorrow);
   return events.filter((e) => {
     if (e.status === "cancelled" || e.status === "completed") return false;
-    return e.date === todayStr || e.date === tomorrowStr;
+    const inWindow = e.date === todayStr || e.date === tomorrowStr;
+    if (!inWindow) return false;
+    if (enrollments && enrollments.size > 0) {
+      const visible = isEventVisible({ subject_id: e.subject_id ?? null, comision_id: (e as unknown as { comision_id?: string | null }).comision_id ?? null }, enrollments);
+      if (!visible) return false;
+    }
+    return true;
   });
 }
 

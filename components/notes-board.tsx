@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Copy, ExternalLink, FileText, FolderOpen } from "lucide-react";
 import { motion } from "framer-motion";
 import { SubjectModal } from "@/components/subject-modal";
@@ -13,6 +13,14 @@ import { useAuth } from "@/lib/auth-context";
 import { cardHover, hoverTransition, staggerContainer, staggerItem, useReducedMotion, withReducedMotion } from "@/lib/motion";
 
 type NotesFocus = { subjectId: string | null; noteId: string | null; commentId: string | null } | null;
+
+type LiveNoteCard = { id: string; subject_id: string; title: string; drive_web_view_link: string; drive_file_id: string; expires_at: string | null; created_at: string; is_active?: boolean };
+
+// Module-level live-note cache (60s TTL). NotesBoard remounts on every
+// navigation and several global events re-trigger fetches; without this each
+// mount fires one /api request PER subject, which is the slow loading.
+const LIVE_CACHE_TTL_MS = 60_000;
+const liveCache = new Map<string, { card: LiveNoteCard | null; at: number }>();
 
 export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; focus?: NotesFocus }) {
   const [query, setQuery] = useState("");
@@ -26,7 +34,6 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
   const [error, setError] = useState("");
   const [countsVersion, setCountsVersion] = useState(0);
   const LIVE_NOTES_ENABLED = process.env.NEXT_PUBLIC_LIVE_NOTES_ENABLED !== "false";
-  type LiveNoteCard = { id: string; subject_id: string; title: string; drive_web_view_link: string; drive_file_id: string; expires_at: string | null; created_at: string; is_active?: boolean };
   const [liveMap, setLiveMap] = useState<Record<string, LiveNoteCard | null>>({});
   const [liveCopiedId, setLiveCopiedId] = useState<string | null>(null);
   const [driveRootUrl, setDriveRootUrl] = useState<string | null>(null);
@@ -35,9 +42,19 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
     entries: schedule.filter((entry) => entry.code === subject.code),
   }));
 
+  // Stable string key: the parent may pass a fresh schedule array identity on
+  // unrelated re-renders — effects must key on content, not on the array.
+  const subjectIdsKey = useMemo(() => Array.from(new Set(schedule.map((entry) => entry.subjectId))).sort().join(","), [schedule]);
+  const codeBySubjectId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of schedule) if (!map.has(entry.subjectId)) map.set(entry.subjectId, entry.code);
+    return map;
+  }, [schedule]);
+
   useEffect(() => {
     setRemoteCounts({});
     setError("");
+    liveCache.clear();
     setLoading(Boolean(supabase && userId));
   }, [userId]);
 
@@ -47,8 +64,8 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
       return;
     }
     let active = true;
-    const subjectIds = Array.from(new Set(schedule.map((entry) => entry.subjectId)));
-    if (subjectIds.length === 0) return () => { active = false; };
+    if (!subjectIdsKey) { setLoading(false); return () => { active = false; }; }
+    const subjectIds = subjectIdsKey.split(",");
     void supabase.from("notes").select("subject_id").in("subject_id", subjectIds).then(({ data, error: queryError }) => {
       if (!active) return;
       if (queryError) { setError("No se pudieron cargar las notas compartidas."); setRemoteCounts({}); }
@@ -56,7 +73,7 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
       setLoading(false);
     });
     return () => { active = false; };
-  }, [authResolved, countsVersion, schedule, userId]);
+  }, [authResolved, countsVersion, subjectIdsKey, userId]);
 
   useEffect(() => {
     const refresh = () => setCountsVersion((version) => version + 1);
@@ -66,15 +83,31 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
 
   useEffect(() => {
     if (!focus?.subjectId) return;
-    const entry = schedule.find((item) => item.subjectId === focus.subjectId);
-    if (entry && entry.code !== selectedCode) setSelectedCode(entry.code);
-  }, [focus, schedule, selectedCode]);
+    const code = codeBySubjectId.get(focus.subjectId);
+    if (code && code !== selectedCode) setSelectedCode(code);
+  }, [focus, codeBySubjectId, selectedCode]);
 
-  const fetchLiveForSubjects = useCallback(async (subjectIds: string[]) => {
+  const fetchLiveForSubjects = useCallback(async (subjectIds: string[], opts?: { force?: boolean }) => {
     if (!LIVE_NOTES_ENABLED || !userId || subjectIds.length === 0) {
       if (!userId) setLiveMap({});
       return;
     }
+    // Serve fresh cache hits immediately; only stale/missing ids hit the API.
+    const now = Date.now();
+    const cached: Array<readonly [string, LiveNoteCard | null]> = [];
+    const stale = subjectIds.filter((sid) => {
+      const hit = opts?.force ? undefined : liveCache.get(sid);
+      if (hit && now - hit.at < LIVE_CACHE_TTL_MS) { cached.push([sid, hit.card] as const); return false; }
+      return true;
+    });
+    if (cached.length > 0) {
+      setLiveMap((prev) => {
+        const next = { ...prev };
+        for (const [sid, card] of cached) next[sid] = card;
+        return next;
+      });
+    }
+    if (stale.length === 0) return;
     let token: string | null = null;
     try {
       const { data } = await (supabase?.auth.getSession() ?? { data: { session: null } } as unknown as { data: { session: { access_token: string } | null } });
@@ -84,7 +117,7 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
     }
     const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const entries = await Promise.all(
-      subjectIds.map(async (sid) => {
+      stale.map(async (sid) => {
         try {
           const res = await fetch(`/api/drive/live-note?subjectId=${encodeURIComponent(sid)}`, { cache: "no-store", headers: authHeaders });
           if (res.status === 404) return [sid, null] as const;
@@ -112,26 +145,27 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
         }
       }),
     );
+    const fetchedAt = Date.now();
     setLiveMap((prev) => {
       const next = { ...prev };
-      for (const [sid, card] of entries) next[sid] = card;
+      for (const [sid, card] of entries) {
+        next[sid] = card;
+        liveCache.set(sid, { card, at: fetchedAt });
+      }
       return next;
     });
   }, [LIVE_NOTES_ENABLED, userId]);
 
   useEffect(() => {
-    const ids = Array.from(new Set(schedule.map((e) => e.subjectId)));
-    void fetchLiveForSubjects(ids);
-  }, [fetchLiveForSubjects, schedule]);
+    if (!subjectIdsKey) return;
+    void fetchLiveForSubjects(subjectIdsKey.split(","));
+  }, [fetchLiveForSubjects, subjectIdsKey]);
 
   useEffect(() => {
     const handler = (ev: Event) => {
       const detail = (ev as CustomEvent).detail as { subjectId?: string } | undefined;
-      if (detail?.subjectId) void fetchLiveForSubjects([detail.subjectId]);
-      else {
-        const ids = Array.from(new Set(schedule.map((e) => e.subjectId)));
-        void fetchLiveForSubjects(ids);
-      }
+      if (detail?.subjectId) void fetchLiveForSubjects([detail.subjectId], { force: true });
+      else if (subjectIdsKey) void fetchLiveForSubjects(subjectIdsKey.split(","));
     };
     window.addEventListener("horarium:live-notes-changed", handler as EventListener);
     window.addEventListener("notifications-updated", handler as EventListener);
@@ -139,7 +173,7 @@ export function NotesBoard({ schedule, focus }: { schedule: ScheduleEntry[]; foc
       window.removeEventListener("horarium:live-notes-changed", handler as EventListener);
       window.removeEventListener("notifications-updated", handler as EventListener);
     };
-  }, [fetchLiveForSubjects, schedule]);
+  }, [fetchLiveForSubjects, subjectIdsKey]);
 
   const handleCopyLiveLink = useCallback(async (url: string, id: string) => {
     try {

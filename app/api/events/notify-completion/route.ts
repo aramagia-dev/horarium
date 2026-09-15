@@ -35,10 +35,10 @@ export async function POST(req: Request) {
   try {
     const service = getServiceClient();
 
-    // Fetch event (title + type + completed_by)
+    // Fetch event (title + type + completed_by + comision scoping)
     const { data: eventRow, error: eventErr } = await service
       .from("academic_events")
-      .select("id, title, event_type, completed_by")
+      .select("id, title, event_type, completed_by, subject_id, comision_id")
       .eq("id", eventId)
       .maybeSingle();
     if (eventErr) throw eventErr;
@@ -47,6 +47,8 @@ export async function POST(req: Request) {
     const eventTitle = (eventRow as { title: string }).title ?? "evento";
     const eventType = (eventRow as { event_type?: string }).event_type ?? "individual";
     const completedBy = (eventRow as { completed_by: string | null }).completed_by ?? null;
+    const eventSubjectId = (eventRow as { subject_id?: string | null }).subject_id ?? null;
+    const eventComisionId = (eventRow as { comision_id?: string | null }).comision_id ?? null;
 
     // Determine completers ordered by completed_at asc
     let completers: Array<{ user_id: string; display_name: string | null; completed_at: string | null }> = [];
@@ -91,10 +93,17 @@ export async function POST(req: Request) {
     const notifBody = formatEventCompletedBody(firstName, otherCount, eventTitle);
     const notifTitle = "Evento completado";
 
-    // Recipients: all profiles except actor
-    const { data: profiles, error: profErr } = await service.from("profiles").select("id").neq("id", user.id).limit(1000);
-    if (profErr) throw profErr;
-    const recipientIds = (profiles ?? []).map((p: { id: string }) => p.id).filter(Boolean);
+    // Recipients: scoped to enrolled users when event has comision
+    let recipientIds: string[] = [];
+    if (!eventSubjectId || !eventComisionId) {
+      const { data: profiles, error: profErr } = await service.from("profiles").select("id").neq("id", user.id).limit(1000);
+      if (profErr) throw profErr;
+      recipientIds = (profiles ?? []).map((p: { id: string }) => p.id).filter(Boolean);
+    } else {
+      const { data: enrollRows, error: enrollErr } = await service.from("user_enrollments").select("user_id").eq("subject_id", eventSubjectId).eq("comision_id", eventComisionId).neq("user_id", user.id).limit(1000);
+      if (enrollErr) throw enrollErr;
+      recipientIds = ((enrollRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id).filter(Boolean);
+    }
     if (recipientIds.length === 0) return json({ ok: true, recipients: 0 }, 200);
 
     // Build rows and upsert batched 100 onConflict (user_id,event_id) for type='event_completed'

@@ -338,7 +338,7 @@ export function ScheduleBoard({ schedule, events, onSelectSubject, onSelectEvent
                 if (offset.x < 0) goNextDay();
                 else goPrevDay();
               }}
-              className="w-full max-w-full min-w-0 space-y-3 overflow-x-hidden p-4"
+              className="w-full max-w-full min-w-0 space-y-4 overflow-x-hidden p-4"
             >
               {schedule
                 .filter((item) => item.day === activeDay)
@@ -386,6 +386,11 @@ function ScheduleCard({ entry, date, events, subjectSessions, onSelect, onSelect
   const top = timelineInset + (minutesFromStart(entry.start) / totalMinutes) * timelineContentHeight;
   const height = ((minutesFromStart(entry.end) - minutesFromStart(entry.start)) / totalMinutes) * timelineContentHeight;
   const sessionEvents = getSessionEvents(entry, date, events, subjectSessions);
+  // Short sessions get less vertical room than their content needs: shed lines
+  // instead of clipping them, and leave 1px breathing room so neighbors don't touch.
+  const compact = height < 120;
+  const tiny = height < 84;
+  const whoRoom = [entry.professor, entry.room].filter((v) => v && v !== "Sin asignar").join(" - ");
   return (
     <motion.div
       role="button"
@@ -395,20 +400,20 @@ function ScheduleCard({ entry, date, events, subjectSessions, onSelect, onSelect
       whileHover={reduced ? undefined : scheduleCardHover}
       whileTap={reduced ? undefined : { scale: 0.99 }}
       transition={hoverTransition}
-      className={`schedule-card accent-${entry.accent} absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-[10px] border px-3 py-2.5 text-left sm:left-2 sm:right-2`}
-      style={{ top, height, minHeight: 108 }}
+      className={`schedule-card accent-${entry.accent} absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-[10px] border px-3 text-left sm:left-2 sm:right-2 ${compact ? "py-1.5" : "py-2.5"}`}
+      style={{ top: top + 1, height: Math.max(height - 2, 48) }}
     >
       <span className="block truncate text-[10px] font-bold tracking-[0.12em] opacity-80 uppercase">{entry.section}</span>
-      {sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} compact /> : null}
-      <strong className="mt-1 block line-clamp-2 text-sm font-bold leading-4">{entry.subject}</strong>
-      <span className="mt-1.5 block truncate text-[11px] font-medium opacity-75">{entry.professor}</span>
-      <span className="mt-0.5 block truncate text-[11px] font-medium opacity-75">{entry.room}</span>
+      {!tiny && sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} compact /> : null}
+      <strong className={`mt-1 block font-bold ${tiny ? "line-clamp-1 text-[13px] leading-4" : "line-clamp-2 text-sm leading-4"}`}>{entry.subject}</strong>
+      {tiny || !whoRoom ? null : <span className="mt-1.5 block truncate text-[11px] font-medium opacity-75">{whoRoom}</span>}
     </motion.div>
   );
 }
 
 function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], onSelect, onSelectEvent, reduced }: { entry: ScheduleEntry; date: Date; events: AcademicEvent[]; subjectSessions?: ScheduleEntry[]; onSelect: (subject: ScheduleEntry, date: Date) => void; onSelectEvent: (event: AcademicEvent) => void; reduced: boolean | null }) {
   const sessionEvents = getSessionEvents(entry, date, events, subjectSessions);
+  const whoRoom = [entry.professor, entry.room].filter((v) => v && v !== "Sin asignar").join(" - ");
   return (
     <motion.div
       role="button"
@@ -426,8 +431,7 @@ function MobileScheduleCard({ entry, date, events, subjectSessions = [entry], on
       </div>
       <div className="min-w-0 flex-1 overflow-hidden">
         <strong className="block break-words text-base font-bold leading-5">{entry.subject}</strong>
-        <span className="mt-1 block break-words text-sm opacity-75">{entry.professor}</span>
-        <span className="mt-2 block break-words text-sm opacity-75">⌖ {entry.room}</span>
+        {whoRoom ? <span className="mt-1 block break-words text-sm opacity-75">{whoRoom}</span> : null}
         {sessionEvents.length ? <EventPreview events={sessionEvents} onSelect={onSelectEvent} /> : null}
       </div>
       <span className="shrink-0 rounded-full border border-black/5 bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide text-slate-700 shadow-sm dark:border-white/10 dark:bg-white dark:text-slate-800">{entry.section.replace("Section ", "Sec ")}</span>

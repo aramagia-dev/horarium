@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarCheck2, CalendarDays, Clock3, GraduationCap, House, MapPin, Menu, Moon, NotebookPen, PanelLeft, PanelLeftClose, Settings, Sun, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -21,10 +21,15 @@ import { isEventOverdue, type AcademicEvent, type EnrichedEvent } from "@/lib/ac
 import { formatDateInput } from "@/lib/calendar-utils";
 import { useAuth } from "@/lib/auth-context";
 import { useSchedule } from "@/lib/schedule-context";
+import { getEnrolledSchedule, isEventVisible } from "@/lib/enrollments";
+import { EnrollmentOnboarding } from "@/components/enrollment-onboarding";
 import { backdropVariants, drawerVariants, pageVariants, useReducedMotion } from "@/lib/motion";
 
 type View = "home" | "schedule" | "events" | "notes" | "subjects" | "professors" | "rooms" | "settings" | "admin";
 type NavItem = { view: View; icon: LucideIcon; label: string };
+// The calendar is always personal: logged-out users and accounts without
+// enrollment see an empty calendar. Nobody gets the merged global view.
+const emptyMeansAll = false;
 const themeKey = "horarium:theme";
 const baseNavItems: NavItem[] = [
   { view: "home", icon: House, label: "Inicio" }, { view: "schedule", icon: CalendarDays, label: "Horario" },
@@ -42,8 +47,8 @@ export default function AppShell() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [notesFocus, setNotesFocus] = useState<{ subjectId: string | null; noteId: string | null; commentId: string | null } | null>(null);
   const [dark, setDark] = useState(false);
-  const { isAdmin, userId } = useAuth();
-  const { publicData, refresh: refreshPublicData } = useSchedule();
+  const { isAdmin, userId, loading: authLoading } = useAuth();
+  const { publicData, refresh: refreshPublicData, enrollments, enrollmentsLoading } = useSchedule();
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -73,7 +78,24 @@ export default function AppShell() {
     window.localStorage.setItem(themeKey, next ? "dark" : "light");
   }
 
-  const schedule = publicData?.schedule ?? [];
+  // While auth or enrollments resolve, render an empty schedule instead of
+  // flashing the global view for a second. The calendar is always personal:
+  // logged-out users and accounts without enrollment see an empty calendar.
+  // Nobody gets the merged global view anymore.
+  const dataReady = !authLoading && !enrollmentsLoading;
+  // Memoized: getEnrolledSchedule/filter return a NEW array every call, and a
+  // fresh prop identity makes boards (notas, eventos…) refetch on every
+  // header/notification re-render. Only recompute when the inputs change.
+  const schedule = useMemo(
+    () => (dataReady ? getEnrolledSchedule(publicData?.schedule ?? [], enrollments, { emptyMeansAll }) : []),
+    [dataReady, publicData, enrollments],
+  );
+  const visibleEventsForCalendar = useMemo(
+    () => (dataReady ? (publicData?.events ?? []) : []).filter((e) =>
+      isEventVisible({ subject_id: e.subject_id, comision_id: e.comision_id ?? null }, enrollments, { emptyMeansAll }),
+    ),
+    [dataReady, publicData, enrollments],
+  );
   const navItems = isAdmin ? [...baseNavItems, { view: "admin" as const, icon: Wrench, label: "Administración" }] : baseNavItems;
 
   function navigate(nextView: View) { setView(nextView); setDrawerOpen(false); }
@@ -176,12 +198,13 @@ export default function AppShell() {
             exit="exit"
             className="min-w-0 max-w-full overflow-x-hidden"
           >
-            {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={publicData.events} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex w-full max-w-full min-w-0 items-center gap-2 no-scrollbar overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 sm:max-w-5xl"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{[...publicData.events].filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? "")).slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{publicData.events.filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).length === 0 && publicData.events.filter((e) => e.status !== "cancelled").length > 0 ? <span className="text-xs text-[var(--muted)]">¡Estás al día!</span> : publicData.events.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div><ScheduleBoard schedule={schedule} events={publicData.events} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} /></> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} onClearSelectedEvent={() => setSelectedEventId(null)} /> : view === "notes" ? <NotesBoard schedule={schedule} focus={notesFocus} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
+            {!publicData ? <LoadingState /> : view === "home" ? <AppOverview schedule={schedule} events={visibleEventsForCalendar} onNavigate={navigate} /> : view === "schedule" ? <><div aria-label="Próximos eventos del calendario" className="mx-auto mb-5 flex w-full max-w-full min-w-0 items-center gap-2 no-scrollbar overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 sm:max-w-5xl"><span className="shrink-0 text-xs font-bold text-[var(--accent)]">Eventos:</span>{[...visibleEventsForCalendar].filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? "")).slice(0, 4).map((event) => <button type="button" key={event.id} onClick={() => selectEvent(event)} className="shrink-0 rounded-full bg-[var(--soft)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">{event.date.slice(8, 10)}/{event.date.slice(5, 7)} · {event.title}</button>)}{visibleEventsForCalendar.filter((e) => e.status !== "cancelled" && !(e as EnrichedEvent).isCompletedByMe && !isEventOverdue(e, (e as EnrichedEvent).isCompletedByMe)).length === 0 && visibleEventsForCalendar.filter((e) => e.status !== "cancelled").length > 0 ? <span className="text-xs text-[var(--muted)]">¡Estás al día!</span> : visibleEventsForCalendar.length === 0 ? <span className="text-xs text-[var(--muted)]">No hay eventos cargados</span> : null}</div>{dataReady && schedule.length === 0 ? <div className="mx-auto max-w-5xl rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)] px-6 py-10 text-center"><p className="text-sm font-medium text-[var(--ink)]">No tienes materias en tu calendario.</p><p className="mt-1 text-sm text-[var(--muted)]">{userId ? "Selecciona tus comisiones en Mis materias para ver tu horario." : "Inicia sesión y selecciona tus comisiones para ver tu horario."}</p>{userId ? <button type="button" onClick={() => navigate("subjects")} className="mt-4 rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Ir a Mis materias</button> : null}</div> : <ScheduleBoard schedule={schedule} events={visibleEventsForCalendar} onSelectSubject={(subject, date) => selectSubject(subject, date)} onSelectEvent={selectEvent} />}</> : view === "events" ? <EventsBoard events={publicData.events} subjects={publicData.subjects} isAdmin={isAdmin} userId={userId} sourceError={publicData.eventsError} selectedEventId={selectedEventId} onDataChanged={refreshPublicData} onClearSelectedEvent={() => setSelectedEventId(null)} /> : view === "notes" ? <NotesBoard schedule={schedule} focus={notesFocus} /> : view === "settings" ? <SettingsBoard dark={dark} onToggleTheme={toggleTheme} /> : view === "admin" ? <AdminBoard onDataChanged={refreshPublicData} /> : <CatalogBoard schedule={schedule} subjects={publicData.subjects} professors={publicData.professors} rooms={publicData.rooms} kind={view === "subjects" ? "subjects" : view === "professors" ? "professors" : "rooms"} onSelectSubject={(subject) => selectSubject(subject)} />}
           </motion.div>
         </AnimatePresence>
       </div>
     </div>
       {selectedSubject ? <SubjectModal subject={selectedSubject} sessions={schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId)} date={selectedDate ?? undefined} prefillDate={selectedDate ? formatDateInput(selectedDate) : undefined} prefillTime={selectedSubject.start.slice(0, 5)} subjectIdForEvent={selectedSubject.subjectId} legacyEntryIds={[...schedule.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id), ...scheduleSessions.filter((entry) => entry.subjectId === selectedSubject.subjectId).map((entry) => entry.id)]} onClose={() => { setSelectedSubject(null); setSelectedDate(null); }} onOpenNotes={() => { setSelectedSubject(null); setSelectedDate(null); setView("notes"); }} /> : null}
+      <EnrollmentOnboarding />
   </main>;
 }
 

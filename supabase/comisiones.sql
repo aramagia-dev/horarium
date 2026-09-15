@@ -34,7 +34,7 @@ declare
 begin
   -- Unique: drop any legacy unique that lacks comision_id (covers auto-named variants)
   for rec in
-    select conname
+    select conname, oid
     from pg_constraint
     where conrelid = 'public.schedules'::regclass
       and contype = 'u'

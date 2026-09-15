@@ -121,7 +121,16 @@ export function CatalogBoard({ schedule, subjects = [], professors = [], rooms =
                 {userId ? "Seleccioná tu comisión por materia. Si choca con tu semana, se bloquea." : "Inicia sesión para seleccionar tus comisiones."}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {userId && editorFilter !== "todas" ? (
+                <button
+                  type="button"
+                  onClick={() => setEditorFilter("todas")}
+                  className="rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  + Agregar materia
+                </button>
+              ) : null}
               <div role="group" aria-label="Filtro de materias" className="flex rounded-full border border-[var(--line)] p-0.5 text-xs font-semibold">
                 {(["cursando", "todas"] as const).map((f) => (
                   <button

@@ -299,8 +299,8 @@ export async function loadAcademicEvents(): Promise<{ events: EnrichedEvent[]; s
 export async function saveAcademicEvent(input: AcademicEventInput) {
   const rawTitle = input.title.trim();
   const title = rawTitle || (input.type === "feriado" ? "Sin clases" : "");
-  // feriado events are always global (no comision)
-  const comisionId = input.type === "feriado" ? null : (input.comision_id ?? null);
+  // feriado can target one comisión (only that class is off) or stay global
+  const comisionId = input.comision_id ?? null;
   const value = {
     title,
     type: input.type,

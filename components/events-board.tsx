@@ -435,7 +435,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
               <label className="text-xs font-semibold text-[var(--muted)]">Fecha<input className="admin-control mt-1" required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
               {form.type !== "feriado" ? <label className="text-xs font-semibold text-[var(--muted)]">Hora opcional<input className="admin-control mt-1" type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label> : null}
               <label className="text-xs font-semibold text-[var(--muted)]">Materia<select className="admin-control mt-1" value={form.subject_id ?? ""} onChange={(e) => { const subject = subjects.find((item) => item.id === e.target.value); setForm({ ...form, subject_id: e.target.value || null, comision_id: null, subject_code: subject?.code ?? null }); }}><option value="">Sin materia</option>{visibleSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
-              {form.type !== "feriado" && form.subject_id && formSubjectComisiones.length > 0 ? (
+              {form.subject_id && formSubjectComisiones.length > 0 ? (
                 <label className="text-xs font-semibold text-[var(--muted)]">Comisión<select className="admin-control mt-1" value={form.comision_id ?? ""} onChange={(e) => setForm({ ...form, comision_id: e.target.value || null })}><option value="">Todas</option>{formSubjectComisiones.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
               ) : null}
               <label className="text-xs font-semibold text-[var(--muted)]">Estado<select className="admin-control mt-1" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AcademicEventStatus })}>{eventStatuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select></label>
@@ -448,7 +448,7 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
                   <p className="mt-1 text-[10px] font-normal leading-3 text-[var(--muted)]">Individual: cada uno marca el suyo · Grupal: uno completa por todos</p>
                 </label>
               ) : (
-                <p className="mt-1 text-[10px] leading-3 text-[var(--muted)]">Evento informativo para toda la cursada — no se marca como completado.</p>
+                <p className="mt-1 text-[10px] leading-3 text-[var(--muted)]">Evento informativo — no se marca como completado.</p>
               )}
               <label className="text-xs font-semibold text-[var(--muted)] sm:col-span-2">Descripción<textarea className="admin-control mt-1 min-h-20" required={form.type === "feriado"} placeholder={form.type === "feriado" ? "Ej: Feriado nacional, paro, suspensión por lluvia…" : undefined} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
             </div>

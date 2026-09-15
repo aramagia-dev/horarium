@@ -1,0 +1,20 @@
+{
+  "name": "Horarium",
+  "short_name": "Horarium",
+  "description": "Un horario universitario semanal compartido.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#100d1a",
+  "theme_color": "#7c3aed",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/window.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import { AtSign, Bell, CalendarCheck2, CheckCircle, FileText, MessageCircle } fr
 import { AnimatePresence, motion } from "framer-motion";
 import { dropdownVariants, useReducedMotion } from "@/lib/motion";
 import { useAuth } from "@/lib/auth-context";
+import { PushToggle } from "@/components/push-toggle";
 import { useSchedule } from "@/lib/schedule-context";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import {
@@ -287,6 +288,7 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
               ) : null}
             </div>
           </div>
+          {userId ? <PushToggle /> : null}
 
           {/* Por vencer */}
           <div className="border-b border-[var(--line)] px-4 py-3">

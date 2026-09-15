@@ -327,6 +327,24 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
             })),
           );
         }
+        // System push (best-effort): same recipients, deep link to the event.
+        try {
+          const { dispatchPush } = await import("@/lib/push-client");
+          await dispatchPush(
+            recipients.map((uid: string) => ({
+              user_id: uid,
+              actor_id: userId,
+              type: "new_event",
+              title,
+              body,
+              note_id: null,
+              event_id: eventId,
+              comment_id: null,
+            })),
+          );
+        } catch {
+          // ignore — in-app notification already saved
+        }
         window.dispatchEvent(new CustomEvent("notifications-updated"));
       } catch (e) {
         console.warn("[horarium] new_event notifications failed", e);

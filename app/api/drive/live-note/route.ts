@@ -499,4 +499,16 @@ async function fanOutLiveNoteNotifications(
     const { error: insErr } = await supabase.from("notifications").insert(batch);
     if (insErr) throw insErr;
   }
+
+  // System push (best-effort, never blocks the 201)
+  try {
+    const { sendPushToUsers } = await import("@/lib/server-push");
+    await sendPushToUsers(supabase, userIds, {
+      title,
+      body: `Tocá para abrir el documento de ${subjectName}`,
+      target: { view: "notes", subjectId },
+    });
+  } catch (e) {
+    console.error("[POST live-note] push failed (non-fatal)", e);
+  }
 }

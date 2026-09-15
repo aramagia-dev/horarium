@@ -820,10 +820,12 @@ export function SubjectModal({
       // fetch note author
       let noteAuthorId: string | null = null;
       let noteTitle: string | null = null;
+      let noteSubjectId: string | null = null;
       try {
         const { data: noteRow } = await supabase.from("notes").select("author_id, title, subject_id").eq("id", noteId).maybeSingle();
         noteAuthorId = (noteRow as { author_id?: string | null } | null)?.author_id ?? null;
         noteTitle = (noteRow as { title?: string | null } | null)?.title ?? null;
+        noteSubjectId = (noteRow as { subject_id?: string | null } | null)?.subject_id ?? null;
       } catch {
         // ignore
       }
@@ -877,6 +879,13 @@ export function SubjectModal({
       if (items.length > 0) {
         await createNotifications(items);
         window.dispatchEvent(new CustomEvent("notifications-updated"));
+        // System push (best-effort): same recipients, deep link to the note.
+        try {
+          const { dispatchPush } = await import("@/lib/push-client");
+          await dispatchPush(items.map((i) => ({ ...i, subject_id: noteSubjectId })));
+        } catch {
+          // ignore — in-app notification already saved
+        }
       }
     } catch (e) {
       console.warn("[horarium] comment notifications failed", e);

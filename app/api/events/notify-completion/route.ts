@@ -125,6 +125,18 @@ export async function POST(req: Request) {
       if (upErr) throw upErr;
     }
 
+    // System push (best-effort, never blocks the fan-out)
+    try {
+      const { sendPushToUsers } = await import("@/lib/server-push");
+      await sendPushToUsers(service, recipientIds, {
+        title: notifTitle,
+        body: notifBody,
+        target: { view: "events", eventId },
+      });
+    } catch (e) {
+      console.error("[POST notify-completion] push failed (non-fatal)", e);
+    }
+
     return json({ ok: true, recipients: recipientIds.length, body: notifBody }, 200);
   } catch (e) {
     console.error("[POST notify-completion] error", e);

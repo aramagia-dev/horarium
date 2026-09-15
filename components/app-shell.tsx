@@ -126,6 +126,30 @@ export default function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Push landing: a tapped system notification opens /?push=... — route once through the same navigate flow, then clean the URL.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const push = params.get("push");
+      if (push !== "events" && push !== "notes") return;
+      if (push === "events") {
+        const eventId = params.get("event");
+        if (eventId) selectEventById(eventId);
+        else navigate("events");
+      } else if (params.get("note") || params.get("subject")) {
+        selectNoteFocus(params.get("subject"), params.get("note"), params.get("comment"));
+      } else {
+        navigate("notes");
+      }
+      for (const k of ["push", "event", "note", "subject", "comment"]) params.delete(k);
+      const qs = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
+    } catch {
+      // ignore malformed landing URLs
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fallback: ensure horarium:create-event also navigates to Eventos even if subject-modal didn't dispatch navigate (race safety)
   useEffect(() => {
     const handler = (e: Event) => {

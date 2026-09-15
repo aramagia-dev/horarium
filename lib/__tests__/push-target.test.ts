@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPushUrl, pushTag } from "@/lib/push-target";
+import { buildPushUrl, formatReminderBody, pushTag } from "@/lib/push-target";
 
 describe("buildPushUrl", () => {
   it("routes event pushes to the events view with the id", () => {
@@ -22,6 +22,16 @@ describe("buildPushUrl", () => {
 
   it("omits missing note refs", () => {
     expect(buildPushUrl({ title: "t", body: "b", target: { view: "notes" } })).toBe("/?push=notes");
+  });
+});
+
+describe("formatReminderBody", () => {
+  it("formats with code, DD/MM and HH:MM", () => {
+    expect(formatReminderBody("Parcial", "RED", "2026-09-16", "18:00:00")).toBe("Parcial · RED · 16/09 18:00");
+  });
+
+  it("omits code and time when missing", () => {
+    expect(formatReminderBody("Entrega", "", "2026-09-16", null)).toBe("Entrega · 16/09");
   });
 });
 

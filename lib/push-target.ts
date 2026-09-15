@@ -34,3 +34,10 @@ export function pushTag(payload: PushPayload): string {
   if (t.view === "events") return `horarium-event-${t.eventId ?? "list"}`;
   return `horarium-note-${t.noteId ?? "list"}`;
 }
+
+/** "Parcial · RED · 16/09 18:00" — mirrors the new_event body shape. */
+export function formatReminderBody(title: string, subjectCode: string, date: string, time: string | null): string {
+  const d = date.length >= 10 ? `${date.slice(8, 10)}/${date.slice(5, 7)}` : date;
+  const t = time ? ` ${time.slice(0, 5)}` : "";
+  return `${title}${subjectCode ? ` · ${subjectCode}` : ""} · ${d}${t}`;
+}

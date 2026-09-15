@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/archive-live-notes",
-      "schedule": "0 3 * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }

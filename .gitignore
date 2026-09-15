@@ -39,6 +39,15 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local agent/tooling artifacts (never commit)
+.agents/
+.atl/
+.codegraph/
+.cortexkit/
+.playwright-mcp/
+skills-lock.json
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

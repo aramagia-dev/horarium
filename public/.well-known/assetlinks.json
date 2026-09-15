@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.horarium.app",
+      "sha256_cert_fingerprints": ["48:33:6A:8A:4E:16:4F:2A:62:6A:B0:B6:6D:BB:5C:71:5A:7A:70:50:8B:7E:8A:4D:F8:DA:75:F2:81:14:DA:06"]
+    }
+  }
+]

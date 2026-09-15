@@ -54,10 +54,7 @@ export function parseDateInput(value: string) {
 
 export function formatWeekHeading(weekStart: Date) {
   const month = weekStart.toLocaleDateString("es-AR", { month: "long" });
-  const thursday = addLocalDays(weekStart, 3);
-  const firstThursday = new Date(thursday.getFullYear(), 0, 4);
-  const week = 1 + Math.round((thursday.getTime() - getWeekStart(firstThursday).getTime()) / (86400000 * 7));
-  return `${month.charAt(0).toUpperCase()}${month.slice(1)} · Semana ${week}`;
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)}`;
 }
 
 export function formatWeekRange(weekStart: Date) {

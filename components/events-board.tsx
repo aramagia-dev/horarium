@@ -89,14 +89,31 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
     return availableComisionesBySubject.get(form.subject_id) ?? [];
   }, [form.subject_id, availableComisionesBySubject]);
   const [comisionFilter, setComisionFilter] = useState("all");
-  // Comisión options follow the subject filter: one subject → its comisiones,
-  // no subject → every known comisión code.
+  // Comisión options are scoped to the user: where they are enrolled, plus
+  // comisiones of events they created themselves (so a creator can filter
+  // what they made for another comisión). Admins — and users who haven't
+  // onboarded yet — keep every known code. The current selection is always
+  // kept so the dropdown never blanks.
   const filterComisiones = useMemo(() => {
-    if (subjectFilter !== "all") return availableComisionesBySubject.get(subjectFilter) ?? [];
-    const all = new Set<string>();
-    for (const list of availableComisionesBySubject.values()) for (const c of list) all.add(c);
-    return [...all].sort();
-  }, [subjectFilter, availableComisionesBySubject]);
+    if (isAdmin || enrollments.size === 0) {
+      if (subjectFilter !== "all") return availableComisionesBySubject.get(subjectFilter) ?? [];
+      const all = new Set<string>();
+      for (const list of availableComisionesBySubject.values()) for (const c of list) all.add(c);
+      return [...all].sort();
+    }
+    const mine = new Set<string>();
+    for (const c of enrollments.values()) if (c) mine.add(c);
+    if (userId) {
+      for (const e of events) {
+        if (e.created_by === userId && e.comision_id) mine.add(e.comision_id);
+      }
+    }
+    if (comisionFilter !== "all") mine.add(comisionFilter);
+    const pool = subjectFilter !== "all"
+      ? (availableComisionesBySubject.get(subjectFilter) ?? [])
+      : [...availableComisionesBySubject.values()].flat();
+    return [...new Set(pool.filter((c) => mine.has(c)))].sort();
+  }, [subjectFilter, availableComisionesBySubject, enrollments, events, userId, isAdmin, comisionFilter]);
   // Regular users pick from their enrolled subjects only, in the form and the
   // filter. Admins — and users who haven't onboarded yet (no enrollments) —
   // keep the full list. The current selection is always kept so editing never
@@ -213,9 +230,13 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
         (typeFilter === "all" || event.type === typeFilter) &&
         (subjectFilter === "all" || event.subject_id === subjectFilter) &&
         (comisionFilter === "all" || !event.comision_id || event.comision_id === comisionFilter) &&
-        isEventVisible({ subject_id: event.subject_id ?? null, comision_id: (event as unknown as { comision_id?: string | null }).comision_id ?? null }, enrollments),
+        // Enrollment visibility — except the creator always sees their own
+        // events. Otherwise creating for another comisión makes the event
+        // vanish with no way to edit or delete it.
+        (isEventVisible({ subject_id: event.subject_id ?? null, comision_id: (event as unknown as { comision_id?: string | null }).comision_id ?? null }, enrollments) ||
+          (userId != null && event.created_by === userId)),
     );
-  }, [events, comisionFilter, subjectFilter, typeFilter, enrollments]);
+  }, [events, comisionFilter, subjectFilter, typeFilter, enrollments, userId]);
 
   const counts = useMemo(() => getCompletionCounts(otherFiltered as EnrichedEvent[]), [otherFiltered]);
 
@@ -249,16 +270,19 @@ export function EventsBoard({ events: initialEvents, subjects, isAdmin, userId, 
       const created = fresh.events.find((e) => e.title === snapshot.title && e.date === snapshot.date) ?? fresh.events[0];
       const eventId = created?.id ?? null;
       if (eventId) {
-        // Ensure visible filters so highlight can scroll into view
-        setCompletionFilter("pendientes");
+        // Ensure visible filters so highlight can scroll into view. An
+        // overdue event would vanish under "pendientes", so show "todos".
+        const showAll = created ? isEventOverdue(created as AcademicEvent, false) : false;
+        const visibleFilter = showAll ? "todos" : "pendientes";
+        setCompletionFilter(visibleFilter);
         setTypeFilter("all");
         setComisionFilter("all");
         setSubjectFilter("all");
         try {
-          window.localStorage.setItem(FILTER_STORAGE_KEY, "pendientes");
+          window.localStorage.setItem(FILTER_STORAGE_KEY, visibleFilter);
         } catch {}
         window.dispatchEvent(new CustomEvent("horarium:navigate", { detail: { view: "events", eventId } }));
-        window.dispatchEvent(new CustomEvent("horarium:events-show-pendientes"));
+        window.dispatchEvent(new CustomEvent(showAll ? "horarium:events-show-todos" : "horarium:events-show-pendientes"));
       }
     }
     if (isCreating && supabase && userId) {

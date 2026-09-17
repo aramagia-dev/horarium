@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { dropdownVariants, useReducedMotion } from "@/lib/motion";
 import { useAuth } from "@/lib/auth-context";
 import { PushToggle } from "@/components/push-toggle";
+import { ReminderSettings } from "@/components/reminder-settings";
 import { useSchedule } from "@/lib/schedule-context";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import {
@@ -289,6 +290,7 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
             </div>
           </div>
           {userId ? <PushToggle /> : null}
+          {userId ? <ReminderSettings /> : null}
 
           {/* Por vencer */}
           <div className="border-b border-[var(--line)] px-4 py-3">

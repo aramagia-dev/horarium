@@ -31,7 +31,9 @@ function isAuthorized(req: Request): boolean {
 /**
  * Cron diario (vercel.json): dos trabajos en uno (límite de crons del plan Hobby).
  * 1. Archiva live notes vencidas (idempotente).
- * 2. Push "Se vence mañana" para eventos de mañana (AR) aún pendientes.
+ * 2. Recordatorios de vencimiento: cada evento próximo avisa por push a los
+ *    usuarios que lo configuraron para esa distancia (reminder_prefs por tipo,
+ *    defaults en lib/reminder-prefs.ts).
  * Guarded by CRON_SECRET (x-cron-secret or Authorization Bearer).
  * Returns {archived, reminders: {events, pushed}}
  */
@@ -91,11 +93,14 @@ export async function GET(req: Request) {
 }
 
 // ---------------------------------------------------------------------------
-// Due-tomorrow reminders: push "Se vence mañana" for pending events dated
-// tomorrow in America/Argentina (UTC-3 todo el año, sin horario de verano).
+// Recordatorios de vencimiento: cada evento próximo (hasta MAX_LEAD_WINDOW
+// días, en America/Argentina = UTC-3 todo el año, sin horario de verano)
+// avisa por push solo a quienes lo configuraron para esa distancia.
 // - Grupal terminada (completed_by) se saltea para todos.
 // - Individual se saltea por usuario que ya la completó (completions table).
 // - Con comisión: solo cursantes de esa comisión. Sin comisión: todos.
+// - Sin fila en reminder_prefs (o sin clave del tipo): defaults de
+//   lib/reminder-prefs.ts. Lista vacía guardada = desactivado para ese tipo.
 // - Push-only: no crea fila en notifications (el "Por vencer" de la campanita
 //   ya cubre lo visual). Stateless: si el cron reintenta, el tag del push
 //   reemplaza la tarjeta anterior en vez de apilar.
@@ -108,6 +113,7 @@ function arDate(offsetDays: number): string {
 type DueEvent = {
   id: string;
   title: string | null;
+  type: string | null;
   date: string;
   time: string | null;
   subject_id: string | null;
@@ -120,13 +126,18 @@ type DueEvent = {
 async function sendDueReminders(
   supabase: ReturnType<typeof getServiceClient>,
 ): Promise<{ events: number; pushed: number }> {
-  const tomorrow = arDate(1);
+  const { leadsFor, MAX_LEAD_WINDOW } = await import("@/lib/reminder-prefs");
+  const { sendPushToUsers } = await import("@/lib/server-push");
+  const { formatReminderBody, reminderTitle } = await import("@/lib/push-target");
+  const today = arDate(0);
+  const horizon = arDate(MAX_LEAD_WINDOW);
   const { data: rows, error: evErr } = await supabase
     .from("academic_events")
-    .select("id, title, date, time, subject_id, comision_id, status, event_type, completed_by")
-    .eq("date", tomorrow);
+    .select("id, title, type, date, time, subject_id, comision_id, status, event_type, completed_by")
+    .gt("date", today)
+    .lte("date", horizon);
   if (evErr) throw evErr;
-  // Status se filtra en código (el volumen es mínimo: solo eventos de mañana).
+  // Status se filtra en código (el volumen es mínimo: eventos próximos).
   const list = ((rows ?? []) as DueEvent[]).filter(
     (e) => e.id && e.date && e.status !== "cancelled" && e.status !== "completed",
   );
@@ -150,8 +161,13 @@ async function sendDueReminders(
   const { data: profiles } = await supabase.from("profiles").select("id").limit(1000);
   const allIds = ((profiles ?? []) as Array<{ id: string }>).map((p) => p.id).filter(Boolean);
 
-  const { sendPushToUsers } = await import("@/lib/server-push");
-  const { formatReminderBody } = await import("@/lib/push-target");
+  const { data: prefRows } = await supabase.from("reminder_prefs").select("user_id, lead_days").limit(5000);
+  const prefByUser = new Map(
+    ((prefRows ?? []) as Array<{ user_id: string; lead_days: unknown }>).map((r) => [
+      r.user_id,
+      r.lead_days as Record<string, unknown>,
+    ]),
+  );
   let pushed = 0;
   let reminded = 0;
   for (const e of list) {
@@ -172,9 +188,14 @@ async function sendDueReminders(
     const done = doneByEvent.get(e.id);
     if (done) recipients = recipients.filter((id) => !done.has(id));
     if (recipients.length === 0) continue;
+    // ¿A cuántos días está? Solo se avisa a quienes lo configuraron para esa distancia.
+    const daysUntil = Math.round((Date.parse(e.date) - Date.parse(today)) / 86400000);
+    if (daysUntil < 1 || daysUntil > MAX_LEAD_WINDOW) continue;
+    const matched = recipients.filter((id) => leadsFor(e.type, prefByUser.get(id) ?? null).includes(daysUntil));
+    if (matched.length === 0) continue;
     const body = formatReminderBody(e.title ?? "evento", codeById.get(e.subject_id ?? "") ?? "", e.date, e.time);
-    const r = await sendPushToUsers(supabase, recipients, {
-      title: "Se vence mañana",
+    const r = await sendPushToUsers(supabase, matched, {
+      title: reminderTitle(daysUntil),
       body,
       target: { view: "events", eventId: e.id },
     });

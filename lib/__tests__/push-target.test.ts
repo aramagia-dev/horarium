@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPushUrl, formatReminderBody, pushTag } from "@/lib/push-target";
+import { buildPushUrl, formatReminderBody, pushTag, reminderTitle } from "@/lib/push-target";
 
 describe("buildPushUrl", () => {
   it("routes event pushes to the events view with the id", () => {
@@ -32,6 +32,16 @@ describe("formatReminderBody", () => {
 
   it("omits code and time when missing", () => {
     expect(formatReminderBody("Entrega", "", "2026-09-16", null)).toBe("Entrega · 16/09");
+  });
+});
+
+describe("reminderTitle", () => {
+  it("says manana for 1 day out", () => {
+    expect(reminderTitle(1)).toBe("Se vence mañana");
+  });
+
+  it("counts days otherwise", () => {
+    expect(reminderTitle(7)).toBe("Faltan 7 días");
   });
 });
 

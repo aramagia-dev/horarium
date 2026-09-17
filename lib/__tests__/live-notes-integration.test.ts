@@ -240,6 +240,7 @@ describe("live-notes integration: RLS + lazy expiry + cron", () => {
       const chain: Record<string, unknown> = {};
       chain.select = vi.fn(() => chain);
       chain.eq = vi.fn(() => chain);
+      chain.gt = vi.fn(() => chain);
       chain.lte = vi.fn(async () => ({ data: [], error: null }));
       chain.in = vi.fn(() => chain);
       chain.update = vi.fn(() => chain);

@@ -41,3 +41,8 @@ export function formatReminderBody(title: string, subjectCode: string, date: str
   const t = time ? ` ${time.slice(0, 5)}` : "";
   return `${title}${subjectCode ? ` · ${subjectCode}` : ""} · ${d}${t}`;
 }
+
+/** "Se vence mañana" / "Faltan N días". */
+export function reminderTitle(daysUntil: number): string {
+  return daysUntil <= 1 ? "Se vence mañana" : `Faltan ${daysUntil} días`;
+}

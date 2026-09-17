@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { LEAD_OPTIONS, REMINDER_TYPES, leadsFor } from "@/lib/reminder-prefs";
@@ -96,13 +97,24 @@ export function ReminderSettings() {
   if (!userId) return null;
 
   return (
-    <div className="border-t border-[var(--line)] px-4 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold text-[var(--ink)]">Recordatorios</p>
-          <p className="text-[11px] leading-4 text-[var(--muted)]">Días antes de cada evento, en este dispositivo.</p>
-        </div>
-        {hasRow ? (
+    <details className="group border-t border-[var(--line)] px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+        <span>
+          <span className="block text-xs font-bold tracking-[0.12em] text-[var(--muted)] uppercase">
+            Recordatorios
+          </span>
+          <span className="block text-[11px] leading-4 text-[var(--muted)]">
+            Días antes de cada evento, en este dispositivo.
+          </span>
+        </span>
+        <ChevronDown
+          size={16}
+          aria-hidden="true"
+          className="shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180"
+        />
+      </summary>
+      {hasRow ? (
+        <div className="mt-1 flex justify-end">
           <button
             type="button"
             onClick={() => void reset()}
@@ -111,8 +123,8 @@ export function ReminderSettings() {
           >
             Restablecer
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {!loaded ? (
         <p className="mt-2 text-[11px] text-[var(--muted)]">Cargando…</p>
       ) : (
@@ -149,6 +161,6 @@ export function ReminderSettings() {
         </div>
       )}
       {saving ? <p className="mt-1.5 text-[11px] text-[var(--muted)]">Guardando…</p> : null}
-    </div>
+    </details>
   );
 }

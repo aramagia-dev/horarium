@@ -290,7 +290,6 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
             </div>
           </div>
           {userId ? <PushToggle /> : null}
-          {userId ? <ReminderSettings /> : null}
 
           {/* Por vencer */}
           <div className="border-b border-[var(--line)] px-4 py-3">
@@ -351,6 +350,7 @@ export function NotificationsBell({ onSelectEvent, onSelectNote, onNavigateView 
               </ul>
             )}
           </div>
+          {userId ? <ReminderSettings /> : null}
         </motion.div>
       ) : null}
       </AnimatePresence>

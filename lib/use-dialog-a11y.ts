@@ -15,10 +15,24 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     if (!node) return;
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    // Focus first input/textarea/select if available, else first focusable — avoids stealing focus to close button
+    // Focus first input/textarea/select if available, else first focusable — avoids stealing focus to close button.
+    // On touch devices focusing a text field pops the virtual keyboard on open,
+    // so focus the first non-text control (or the dialog itself) instead.
     const raf = window.requestAnimationFrame(() => {
       const focusable = getFocusable(node);
       if (focusable.length === 0) return;
+      if (window.matchMedia("(pointer: coarse)").matches) {
+        const nonText = focusable.find(
+          (el) => el.tagName !== "INPUT" && el.tagName !== "TEXTAREA" && el.tagName !== "SELECT",
+        );
+        if (nonText) {
+          nonText.focus();
+          return;
+        }
+        if (!node.hasAttribute("tabindex")) node.setAttribute("tabindex", "-1");
+        node.focus({ preventScroll: true });
+        return;
+      }
       const preferred = focusable.find((el) => el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
       (preferred ?? focusable[0])?.focus();
     });
